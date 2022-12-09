@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<div id="box"></div>
+
+<script>
+function httpGet(theUrl)
+{
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.open( "GET", theUrl, false ); 
+	xmlHttp.send(null);
+	
+	return xmlHttp.responseText;
+	} 
+
+	var noe = httpGet("http://www.mapquestapi.com/traffic/v2/incidents?key=BGFBW3Gk3NZNBbDdk6MUM3zEoadG1lDC&boundingBox=47.35,18.8,47.60,19.4&filters=construction,incidents");
+	
+	//var noe = httpGet("https://traffic.ls.hereapi.com/traffic/7/incidents.json?apiKey=FkzNnXX_ePbcuzV0BeL8dqE1VNFMxIpoUzPXEwn7Gx4&bbox=45.400,16.800;48.400,22.600");
+	document.getElementById("box").innerHTML = noe;
+</script>
+
+</body>
+</html>
