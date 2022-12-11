@@ -1,0 +1,3 @@
+include requirements.txt
+recursive-include apf/static *
+recursive-include apf/templates *

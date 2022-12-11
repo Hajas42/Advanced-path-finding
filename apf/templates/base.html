@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>{{ title }}</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}"></link>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"  integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI="  crossorigin=""/>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css" integrity="sha512-MV7K8+y+gLIBoVD59lQIYicR65iaqukzvf/nwasF0nqhPay5w/9lJmVM2hMDcnK1OnMGCdVK+iQrJ7lzPJQd1w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <script src="https://code.jquery.com/jquery-3.6.1.min.js" integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ=" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/js/all.min.js" integrity="sha512-rpLlll167T5LJHwp0waJCh3ZRf7pO6IT1+LZOhAyP6phAirwchClbTZV3iqL3BMrVxIYRbzGTpli4rfxsCK6Vw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"  integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+        <script src="{{ url_for('static', filename='js/leaflet-homebutton.js') }}"></script>
+    </head>
+
+    <body>
+        <div id="map"></div>
+        <div id="sidebar">
+            <form autocomplete="off" id="sidebar-from-form" class="sidebar-element sidebar-search sidebar-roundinside">
+                <input class="sidebar-search-input" type="text" name="search" />
+                <button class="sidebar-button sidebar-search-location" type="button"><i class="fa fa-location-dot"></i></button>
+                <button class="sidebar-button sidebar-search-submit" type="submit"><i class="fa fa-search"></i></button>
+            </form>
+            <form autocomplete="off" id="sidebar-to-form" class="sidebar-element sidebar-search sidebar-roundinside">
+                <input class="sidebar-search-input" type="text" name="search" />
+                <button class="sidebar-button sidebar-search-location" type="button"><i class="fa fa-location-dot"></i></button>
+                <button class="sidebar-button sidebar-search-submit" type="submit"><i class="fa fa-search"></i></button>
+            </form>
+            <div class="sidebar-element">
+                <div class="sidebar-listbox">
+                    <select id="sidebar-methodselect">
+                        <option value="" disabled selected>Select a planner...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sidebar-element sidebar-roundinside">
+                <button class="sidebar-button" id="sidebar-button-plan">Plan</button>
+            </div>
+            <div class="sidebar-divider">Options</div>
+            <div id="sidebar-options-container" class="sidebar-placeholder sidebar-placeholder-force" data-placeholder="Select a method first"></div>
+
+            <div class="sidebar-divider">Routes</div>
+            <div id="sidebar-routes" class="sidebar-table sidebar-placeholder" data-placeholder="Plan a route first"></div>
+        </div>
+        
+        <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    </body>
+</html>
