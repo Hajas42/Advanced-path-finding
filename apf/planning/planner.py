@@ -59,23 +59,27 @@ class OptionFieldRange(OptionField):
 
 
 class PlannerInterface(abc.ABC):
+    @classmethod
     @abc.abstractmethod
-    def internal_name(self) -> str:
+    def internal_name(cls) -> str:
         """A name that uniquely identifies this planner. Should only contain lowercase letters and the '_' character."""
         raise NotImplementedError
 
+    @classmethod
     @abc.abstractmethod
-    def display_name(self) -> str:
+    def display_name(cls) -> str:
         """A nice name for the planner."""
         raise NotImplementedError
 
+    @classmethod
     @abc.abstractmethod
-    def description(self) -> str:
+    def description(cls) -> str:
         """A nice description of the planner. Should be 1-2 sentences at max."""
         raise NotImplementedError
 
+    @classmethod
     @abc.abstractmethod
-    def fields_schema(self) -> List[OptionField]:
+    def fields_schema(cls) -> List[OptionField]:
         raise NotImplementedError
 
     @abc.abstractmethod
