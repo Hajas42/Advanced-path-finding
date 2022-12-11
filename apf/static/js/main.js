@@ -1,14 +1,71 @@
 var mapWrapper = (function() {
     var o = {};
 
+    // https://stackoverflow.com/questions/3514784/how-to-detect-a-mobile-device-using-jquery
+    // TODO: somehow sync this with css
+    let isMobile = window.matchMedia("only screen and (max-width: 768px)").matches;
+
     let map;  // the global map object
     let currentPosMarker = null;
     let searchFormFrom = null;
     let searchFormTo = null;
-    let methodList = null;
-    let methodOptionsContainer = null;
     let buttonPlan = null;
-    let routesTable = null;
+    let bodyElement = $('body');
+
+    class Popup {
+        static popups = new Set();
+
+        static addPopup(title, content, modal) {
+            return new Popup(title, content, modal);
+        }
+
+        constructor(title, content, modal) {
+            if (modal) {
+                this._modalElement = $('<div class="modal-block"></div>');
+                bodyElement.append(this._modalElement);
+            } else {
+                this._modalElement = null;
+            }
+
+            this._popupTitleElement = $('<div class="popup-header"></div>');
+            this._popupTitleElement.text(title);
+            this._popupContentElement = $('<div class="popup-content"></div>');
+            this._popupContentElement.text(content);
+            this._buttonOkElement = $('<button type="button">OK</button>');
+            this._buttonCloseElement = $('<button type="button">Close</button>');
+            this._popupButtonsElement = $('<div class="popup-buttons"></div>').append(this._buttonOkElement, this._buttonCloseElement);
+            this._popupElement = $('<div class="popup">').append(this._popupTitleElement, this._popupContentElement, this._popupButtonsElement);
+
+            this._popup_ctx = {popup: this};
+            this._buttonOkElement.bind("click", this._popup_ctx, this._onOk);
+            this._buttonCloseElement.bind("click", this._popup_ctx, this._onClose);
+
+            bodyElement.append(this._popupElement);
+
+            Popup.popups.add(this);
+        }
+
+        _onOk(e) {
+            e.data.popup.remove();
+        }
+
+        _onClose(e) {
+            e.data.popup.remove();
+        }
+
+        remove() {
+            if (this._modalElement != null) {
+                this._modalElement.remove();
+            }
+            this._popupElement.remove();
+            Popup.popups.delete(this);
+        }
+    }
+
+    function onJQueryCommunicationError(jqXHR, textStatus, errorThrown) {
+        console.log("Communication error:", jqXHR, textStatus, errorThrown);
+        Popup.addPopup("Error", "Error while communicating with the backend.", true);
+    }
 
     class PositionRadiusMarker {
         constructor(latlng, radius) {
@@ -107,7 +164,7 @@ var mapWrapper = (function() {
          */
         static constructFormElement() {
             // TODO: is there a nicer way of doing this?
-            return $('<form id="sidebar-from-form" class="sidebar-element sidebar-search sidebar-roundinside">')
+            return $('<form autocomplete="off" id="sidebar-from-form" class="sidebar-element sidebar-search sidebar-roundinside">')
                     .append('<input class="sidebar-search-input" type="text" name="search" />')
                     .append('<button class="sidebar-button sidebar-search-location" type="button"><i class="fa fa-location-dot"></i></button>')
                     .append('<button class="sidebar-button sidebar-search-submit" type="submit"><i class="fa fa-search"></i></button>');
@@ -262,6 +319,11 @@ var mapWrapper = (function() {
             return `hsl(${hue},100%,30%)`;
         }
 
+        static routesTable;
+        static {
+            this.routesTable = $("#sidebar-routes");
+        }
+
         static routes = new Set();
 
         static addRoute(name, waypoints, description, lineColor) {
@@ -309,7 +371,7 @@ var mapWrapper = (function() {
 
             this._entryName.val(name);
             this._entryLine.css('background', lineColor);
-            routesTable.append(this._entryRow);
+            Route.routesTable.append(this._entryRow);
 
             Route.routes.add(this);
         }
@@ -476,27 +538,51 @@ var mapWrapper = (function() {
         }
     }
 
-    class MethodOptions {
-        static _selectedMethodOptions = null;
+    class PlannerOptions {
+        static _selectedPlannerOptions = null;
 
-        static methodOptions = new Map();
+        static plannerOptions = new Map();
 
-        static addMethodOptions(name, display_name, description, fields) {
-            return new MethodOptions(name, display_name, description, fields)
+        // --- Handle 
+        static plannerList;
+        static plannerOptionsContainer;
+        static _onMethodListChange(e) {
+            // Empty selection, should not be possible, but hey
+            if (PlannerOptions.plannerList.val() === "") {
+                PlannerOptions._selectedPlannerOptions.hide();
+                PlannerOptions.plannerOptionsContainer.addClass("sidebar-placeholder-force");
+                return;
+            }
+
+            let planner = PlannerOptions.plannerOptions.get(PlannerOptions.plannerList.val());
+            if (planner.empty()) {
+                PlannerOptions.plannerOptionsContainer.addClass("sidebar-placeholder-force");
+            } else {
+                PlannerOptions.plannerOptionsContainer.removeClass("sidebar-placeholder-force");
+            }
+            planner.show();
+        }
+        static {
+            this.plannerList = $("#sidebar-methodselect");
+            this.plannerOptionsContainer = $("#sidebar-options-container");
+            this.plannerList.change(this._onMethodListChange);
         }
 
-        constructor(name, display_name, description, fields) {
+        static addPlannerOptions(name, displayName, description, fields) {
+            return new PlannerOptions(name, displayName, description, fields)
+        }
+
+        constructor(name, displayName, description, fields) {
             this.name = name;
-            this.display_name = display_name;
+            this.displayName = displayName;
             this.description = description;
             
-            this._methodListElement = $('<option>', {
-                value: name,
-                title: display_name,
-                text: description
+            this._plannerListElement = $('<option>', {
+                value: this.name,
+                text: this.displayName,
+                title: this.description
             });
-            methodList.append(this._methodListElement);
-            console.log(methodList);
+            PlannerOptions.plannerList.append(this._plannerListElement);
 
             this._optionsElement = $('<div class="sidebar-table sidebar-options"></div>');
             this._optionsElement.hide();
@@ -504,9 +590,9 @@ var mapWrapper = (function() {
             this.fields.forEach(field => {
                 this._optionsElement.append(field.row);
             });
-            methodOptionsContainer.append(this._optionsElement);
+            PlannerOptions.plannerOptionsContainer.append(this._optionsElement);
 
-            MethodOptions.methodOptions.set(name, this);
+            PlannerOptions.plannerOptions.set(this.name, this);
         }
 
         valuesToJson() {
@@ -518,24 +604,28 @@ var mapWrapper = (function() {
         }
 
         hide() {
-            if (MethodOptions._selectedMethodOptions === this) {
-                MethodOptions._selectedMethodOptions = null;
+            if (PlannerOptions._selectedPlannerOptions === this) {
+                PlannerOptions._selectedPlannerOptions = null;
             }
             this._optionsElement.hide();
         }
 
         show () {
-            if (MethodOptions._selectedMethodOptions !== null) {
-                MethodOptions._selectedMethodOptions.hide();
+            if (PlannerOptions._selectedPlannerOptions !== null) {
+                PlannerOptions._selectedPlannerOptions.hide();
             }
-            MethodOptions._selectedMethodOptions = this;
+            PlannerOptions._selectedPlannerOptions = this;
             this._optionsElement.show();
         }
 
+        empty() {
+            return this.fields.length == 0;
+        }
+
         remove() {
-            this._methodListElement.remove();
+            this._plannerListElement.remove();
             this._optionsElement.remove();
-            MethodOptions.methodOptions.delete(this);
+            PlannerOptions.plannerOptions.delete(this);
         }
     }
 
@@ -565,9 +655,15 @@ var mapWrapper = (function() {
         map.stopLocate();
     }
 
-    // ------------
+    // -------------------------------------------------------------
+    // - API CALLS
+    // -------------------------------------------------------------
 
-    function requestGeocoding(query, callback) {
+    function latlng2latlon(latlng) {
+        return {lat: latlng.lat, lon: latlng.lng};
+    }
+
+    function requestGeocoding(query, onSuccessCallback, onFailCallback, alwaysCallback) {
         $.ajax({
             url: "/api/geocoding",
             type: "get",
@@ -575,22 +671,19 @@ var mapWrapper = (function() {
             data: {
                 "location": query
             },
-        }).done(callback);
+        }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
-    function requestReverse(latlng, callback) {
+    function requestReverse(latlng, onSuccessCallback, onFailCallback, alwaysCallback) {
         $.ajax({
             url: "/api/reverse",
             type: "get",
             dataType: "json",
-            data: {
-                "lat": latlng.lat,
-                "lon": latlng.lng
-            },
-        }).done(callback);
+            data: latlng2latlon(latlng),
+        }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
-    function requestAutocomplete(query, callback) {
+    function requestAutocomplete(query, onSuccessCallback, onFailCallback, alwaysCallback) {
         $.ajax({
             url: "/api/autocomplete",
             type: "get",
@@ -598,49 +691,44 @@ var mapWrapper = (function() {
             data: {
                 "query": query,
             },
-        }).done(callback);
+        }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
-    function requestMethods(callback) {
+    function requestPlanners(onSuccessCallback, onFailCallback, alwaysCallback) {
         $.ajax({
-            url: "/api/methods",
+            url: "/api/planners",
             type: "get",
             dataType: "json",
-        }).done(callback);
+        }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
-    function requestRoute(from_latlng, to_latlng, method, fields, callback) {
+    function requestPlan(from_latlng, to_latlng, planner, fields, onSuccessCallback, onFailCallback, alwaysCallback) {
         $.ajax({
-            url: "/api/route",
-            type: "get",
+            url: "/api/plan",
+            type: "post",
             dataType: "json",
-            data: {
-                "from": from_latlng.lat + "|" + from_latlng.lng,
-                "to": to_latlng.lat + "|" + to_latlng.lng,
-                "method": method,
-                "options": btoa(JSON.stringify(fields))
-            },
-        }).done(callback);
+            data: JSON.stringify({
+                "from": latlng2latlon(from_latlng),
+                "to": latlng2latlon(to_latlng),
+                "planner": planner,
+                "fields": fields
+            }),
+            contentType: "application/json; charset=utf-8",
+        }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
-    // ------------
+    // -------------------------------------------------------------
+    // - End of API CALLS
+    // -------------------------------------------------------------
 
-    function methodsCallback(result) {
-        if (result["status"] === "ok" && result["methods"].length > 0) {
+    function plannersCallback(result) {
+        if (result["status"] === "ok" && result["planners"].length > 0) {
 
             // Add the methods
-            $.each(result["methods"], function(k, method) {
-                console.log(method);
-                /*
-                methodList.append($('<option>', {
-                    value: method["name"],
-                    title: method["description"],
-                    text: method["display_name"]
-                }));*/
-
-                
+            $.each(result["planners"], function(k, planner) {
+                console.log(planner);
                 let fields = [];
-                $.each(method["fields"], function(j, field) {
+                $.each(planner["fields"], function(j, field) {
                     const field_type = field[0];
                     const field_desc = field[1];
                     switch(field_type) {
@@ -665,48 +753,51 @@ var mapWrapper = (function() {
                                 ));
                             break;
                         default:
-                            alert("Error");
+                            Popup.addPopup("Error", "Error while retrieving the planners.", true);
                             return;
                     }
                 });
 
-                MethodOptions.addMethodOptions(method["name"], method["description"], method["display_name"], fields);
+                PlannerOptions.addPlannerOptions(planner["name"], planner["display_name"], planner["description"], fields);
             });
         } else {
-            // TODO: a massive error message
+            Popup.addPopup("Error", "Error while retrieving the planners.", true);
         }
     }
 
     let routeCounter = 1;
 
-    function onMethodListChange(e) {
-        MethodOptions.methodOptions.get(methodList.val()).show();
-    }
-
     function onPlan(e) {
         from = searchFormFrom.latlng;
         to = searchFormTo.latlng;
-        //fromName = searchFormFrom.location_name;
-        //toName = searchFormTo.location_name;
+        fromName = searchFormFrom.location_name;
+        toName = searchFormTo.location_name;
 
         if (from === null || to === null) {
-            alert("Choose a starting end ending point first");
+            Popup.addPopup("Info", "Please choose a starting end ending point first.", true);
             return;
         }
 
-        if (MethodOptions._selectedMethodOptions == null) {
-            alert("Choose a method first");
+        if (PlannerOptions._selectedPlannerOptions == null) {
+            Popup.addPopup("Info", "Please choose a planner first.", true);
             return;
         }
 
+        // Block the button temporarely
         buttonPlan.prop('disabled', true);
-        requestRoute(from, to, MethodOptions._selectedMethodOptions.name, MethodOptions._selectedMethodOptions.valuesToJson(), function (result){
-            console.log(result);
-            if (result["status"] === "ok") {
-                Route.addRoute(`Route #${routeCounter++}`, result["coords"], "");
+        requestPlan(from, to, PlannerOptions._selectedPlannerOptions.name, PlannerOptions._selectedPlannerOptions.valuesToJson(),
+            function (result){
+                if (result["status"] === "ok") {
+                    let description = `A route from '${fromName}' to '${toName}' using the planner named '${PlannerOptions._selectedPlannerOptions.displayName}'.`
+                    Route.addRoute(`${PlannerOptions._selectedPlannerOptions.displayName} #${routeCounter++}`, result["coords"], description);
+                }
+            },
+            null,
+            function() {
+                // Make sure to unblock the button even upon failiure
+                buttonPlan.prop('disabled', false);
             }
-            buttonPlan.prop('disabled', false);
-        });
+        );
     }
 
     o.init = function() {
@@ -744,6 +835,10 @@ var mapWrapper = (function() {
         // Try fetching the user"s location
         map.locate({watch: true});
 
+        // -----------------------------------------------------
+        // - TODO: move these elsewhere
+        // -----------------------------------------------------
+
         // Search bars
         searchFormFrom = new SearchForm(
             $("#sidebar-from-form"),
@@ -759,15 +854,10 @@ var mapWrapper = (function() {
         );
 
         // Request the methods
-        methodList = $("#sidebar-methodselect");
-        methodList.change(onMethodListChange);
-        methodOptionsContainer = $("#sidebar-options-container");
-        requestMethods(methodsCallback);
+        requestPlanners(plannersCallback);
 
         buttonPlan = $("#sidebar-button-plan");
         buttonPlan.click(onPlan);
-
-        routesTable = $("#sidebar-routes");
 
         console.log("initialized map!");
     }

@@ -26,7 +26,7 @@ class DrunkPilotPlanner(planner.PlannerInterface):
         return "An example planner."
 
     @classmethod
-    def get_option_descriptions(cls) -> List[planner.OptionField]:
+    def fields_schema(cls) -> List[planner.OptionField]:
         return cls._OPTIONS
 
     def __init__(self):
