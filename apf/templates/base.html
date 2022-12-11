@@ -17,14 +17,14 @@
         <div id="map"></div>
         <div id="sidebar">
             <form id="sidebar-from-form" class="sidebar-element sidebar-search sidebar-roundinside">
-                <input id="sidebar-from-input" placeholder="From..." type="text" name="search" />
-                <button id="sidebar-from-location" class="sidebar-button" type="button"><i class="fa fa-location-dot"></i></button>
-                <button class="sidebar-button" type="submit"><i class="fa fa-search"></i></button>
+                <input class="sidebar-search-input" type="text" name="search" />
+                <button class="sidebar-button sidebar-search-location" type="button"><i class="fa fa-location-dot"></i></button>
+                <button class="sidebar-button sidebar-search-submit" type="submit"><i class="fa fa-search"></i></button>
             </form>
             <form id="sidebar-to-form" class="sidebar-element sidebar-search sidebar-roundinside">
-                <input id="sidebar-to-input" placeholder="To..." type="text" name="search" />
-                <button id="sidebar-to-location" class="sidebar-button" type="button"><i class="fa fa-location-dot"></i></button>
-                <button class="sidebar-button" type="submit"><i class="fa fa-search"></i></button>
+                <input class="sidebar-search-input" type="text" name="search" />
+                <button class="sidebar-button sidebar-search-location" type="button"><i class="fa fa-location-dot"></i></button>
+                <button class="sidebar-button sidebar-search-submit" type="submit"><i class="fa fa-search"></i></button>
             </form>
             <div class="sidebar-element">
                 <div class="sidebar-listbox">
@@ -33,11 +33,15 @@
                     </select>
                 </div>
             </div>
+
             <div class="sidebar-element sidebar-roundinside">
                 <button class="sidebar-button" id="sidebar-button-plan">Plan</button>
-                <button class="sidebar-button" id="sidebar-button-clear">Clear</button>
             </div>
-            <hr>
+            <div class="sidebar-divider">Options</div>
+            <div id="sidebar-options-container" class="sidebar-placeholder" data-placeholder="Select a method first"></div>
+
+            <div class="sidebar-divider">Routes</div>
+            <div id="sidebar-routes" class="sidebar-table sidebar-placeholder" data-placeholder="Plan a route first"></div>
         </div>
         <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     </body>

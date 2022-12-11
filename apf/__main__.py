@@ -1,3 +1,7 @@
+import base64
+import json
+import binascii
+
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
 import os
@@ -7,8 +11,6 @@ from .planning import PlannerInterface, DrunkPilotPlanner
 
 
 app = Flask(__name__, template_folder="./templates")
-app.config["GOOGLEMAPS_KEY"] = os.environ.get("GOOGLEMAPS_KEY")
-
 
 geocoder = NominatimGeocoder()
 planners: Dict[str, PlannerInterface] = {
@@ -70,7 +72,7 @@ def api_autocomplete():
     error_reason = "unknown"
     query = request.args.get("query")
     if query:
-        locations = geocoder.resolve_query(query, 5)
+        locations = geocoder.geocode(query, 5)
         if len(locations) >= 1:
             # TODO: sorting might be unnecessary
             return jsonify({
@@ -102,7 +104,9 @@ def api_methods():
         "methods": [{
             "name": name,
             "display_name": planner.display_name(),
-            "description": planner.description()
+            "description": planner.description(),
+            # "options": [dataclasses.asdict(desc) for desc in planner.get_option_descriptions()]
+            "fields": [(field.type_name, field) for field in planner.get_option_descriptions()]
         } for name, planner in planners.items()
         ]
     })
@@ -113,7 +117,8 @@ def api_route():
     query_from = request.args.get("from")
     query_to = request.args.get("to")
     query_method = request.args.get("method")
-    if any(type(x) is not str for x in (query_from, query_to, query_method)) or query_method not in planners:
+    query_options = request.args.get("options")
+    if any(not isinstance(x, str) for x in (query_from, query_to, query_method, query_options)) or query_method not in planners:
         return jsonify({
             "status": "error",
             "reason": "invalid input"
@@ -128,13 +133,18 @@ def api_route():
     try:
         coords_from = _parse_coords(query_from)
         coords_to = _parse_coords(query_to)
-    except ValueError as e:
+        options_dict = json.loads(base64.b64decode(query_options).decode())
+        good_keys = {x.name: x for x in planners[query_method].get_option_descriptions()}
+        if any(not isinstance(k, str) or k not in good_keys or not isinstance(v, good_keys[k].value_type) for k, v in options_dict.items()) or len(good_keys) != len(options_dict):
+            raise ValueError
+    except (ValueError, json.decoder.JSONDecodeError, binascii.Error, UnicodeDecodeError) as e:
         return jsonify({
             "status": "error",
             "reason": "invalid format"
         })
 
-    coords = planners[query_method].plan(coords_from, coords_to, {})
+    print(options_dict)
+    coords = planners[query_method].plan(coords_from, coords_to, options_dict)
     if coords is None:
         return jsonify({
             "status": "error",
@@ -146,9 +156,10 @@ def api_route():
         "coords": coords
     })
 
+
 @app.route("/")
 def main_view():
-    return render_template('base.html', title="Test app")
+    return render_template('base.html', title="Advanced Path Finding")
 
 
 def main():

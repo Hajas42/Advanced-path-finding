@@ -29,8 +29,8 @@ html, body, #map {
     width: 300pt;
     height: auto;
     margin: 10pt;
-    padding: 5pt;
-    background: rgba(255, 255, 255, 0.8);
+    padding: 5pt 10pt;
+    background: rgba(255, 255, 255, 0.9);
     z-index: 999;
     -webkit-border-radius: 8px;
     -moz-border-radius: 8px;
@@ -59,10 +59,8 @@ html, body, #map {
 #sidebar .sidebar-element
 {
     display: flex;
-    left: 0;
-    right: 0;
     width: auto;
-    margin: 5pt 5pt;
+    margin: 5pt 0;
 }
 
 #sidebar .sidebar-element >*
@@ -94,16 +92,6 @@ html, body, #map {
 #sidebar .sidebar-search button:hover
 {
     background: #d5d5d5;
-}
-
-#sidebar-from-location
-{
-    color: #105400;
-}
-
-#sidebar-to-location
-{
-    color: #670000;
 }
 
 #sidebar .sidebar-location-selected
@@ -172,21 +160,224 @@ html, body, #map {
     background: #abdaab;
 }
 
-#sidebar #sidebar-button-clear
+#sidebar .sidebar-divider
 {
-    background: #eac3c3;
+    margin-top: 0.5em;
+    display: flex;
+    flex-direction: row;
+    line-height: 1em;
+    text-align: center;
+    color: #414141;
 }
 
-#sidebar #sidebar-button-clear:hover
-{
-    background: #daabab;
+#sidebar .sidebar-divider:before,
+#sidebar .sidebar-divider:after {
+    content: "";
+    flex: 1 1;
+    border-bottom: 2px solid #c5c5c5;
+    margin: auto 0.5em;
 }
 
-#sidebar > hr
+#sidebar .sidebar-placeholder:empty {
+    text-align: center;
+    color: #747474;
+    padding: 0.5em 0;
+}
+
+#sidebar .sidebar-placeholder:empty:before {
+    content: attr(data-placeholder);
+}
+
+#sidebar .sidebar-table {
+    display: table;
+    border-collapse: collapse;
+    table-layout: auto;
+    width: 100%;
+    margin: 5pt 0;
+}
+
+#sidebar .sidebar-table > .sidebar-table-row {
+    display: table-row;
+}
+
+#sidebar .sidebar-table > .sidebar-table-row > .sidebar-table-cell {
+    display: table-cell;
+}
+
+#sidebar .sidebar-routes-row {
+    line-height: 3em;
+}
+
+#sidebar .sidebar-route-name {
+    text-align: left;
+    padding: 0 5pt;
+}
+
+#sidebar .sidebar-route-name > input {
+    outline: none;
+    border: none;
+    background: none;
+    font-size: inherit;
+    padding: 0;
+    margin: 0;
+}
+
+#sidebar .sidebar-route-line {
+    text-align: center;
+    width: 5em;
+}
+
+#sidebar .sidebar-route-line:hover {
+    cursor: pointer;
+}
+
+#sidebar .sidebar-route-line > div {
+    display: block;
+    content: "";
+    width: 4em;
+    height: 5pt;
+    border-radius: 6pt;
+}
+
+#sidebar .sidebar-route-remove {
+    text-align: center;
+}
+
+#sidebar .sidebar-route-remove > button {
+    display: inline-block;
+    width: 2em;
+    height: 2em;
+    background-color: #e43636;
+    border: none;
+    color: white;
+    padding: 2px;
+    margin: auto;
+    border-radius: 6pt;
+}
+
+#sidebar .sidebar-route-remove > button:hover {
+    background-color: #a51a1a;
+}
+
+#sidebar .sidebar-options {
+    table-layout: fixed;
+}
+
+#sidebar .sidebar-options-row {
+    padding: 0 5pt;
+    line-height: 2.25em;
+}
+
+#sidebar .sidebar-option-name {
+    padding: 0 5pt;
+    width: 45%;
+    text-align: right;
+}
+
+#sidebar .sidebar-option-field {
+    padding-right: 5pt;
+}
+
+#sidebar .sidebar-option-field > * {
+    vertical-align: middle;
+}
+
+/* -----------------------------
+ * Field: range
+ * ----------------------------- */
+
+#sidebar .sidebar-option-field > input[type=range] {
+    appearance: none;
+    width: 100%;
+    height: 2em;
+    background: #eeeeee;
+    outline: none;
+    opacity: 0.7;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+#sidebar .sidebar-option-field > input[type=range]:hover {
+    opacity: 1;
+}
+
+#sidebar .sidebar-option-field > input[type=range]::-webkit-slider-thumb {
+    appearance: none;
+    width: 2em;
+    height: 2em;
+    background: #047baa;
+    cursor: pointer;
+    border: none;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+#sidebar .sidebar-option-field > input[type=range]::-moz-range-thumb {
+    appearance: none;
+    width: 2em;
+    height: 2em;
+    background: #047baa;
+    cursor: pointer;
+    border: none;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+/* -----------------------------
+ * Field: number
+ * ----------------------------- */
+
+ #sidebar .sidebar-option-field > input[type=number] {
+    appearance: none;
+    width: 100%;
+    height: 2em;
+    background: #eeeeee;
+    outline: none;
+    opacity: 0.7;
+    border: none;
+    text-align: right;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+#sidebar .sidebar-option-field > input[type=number]:hover {
+    opacity: 1;
+}
+
+#sidebar .sidebar-option-field > input[type=number]::-webkit-inner-spin-button,
+#sidebar .sidebar-option-field > input[type=number]::-webkit-outer-spin-button
 {
-    left: 0;
-    right: 0;
-    width: auto;
-    margin: 10pt 3pt;
-    border-top: 1px solid #d7d7d7;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+/* -----------------------------
+ * Field: checkbox
+ * ----------------------------- */
+
+ #sidebar .sidebar-option-field > input[type=checkbox] {
+    width: 2em;
+    height: 2em;
+    margin: 0;
+    outline: none;
+}
+
+/* -----------------------------
+ * Field: select
+ * ----------------------------- */
+
+ #sidebar .sidebar-option-field > select {
+    border: none;
+    width: 100%;
+    height: 2em;
+    padding: 0.4em;
+    background: #eeeeee;
+    outline: none;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
 }
