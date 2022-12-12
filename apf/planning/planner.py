@@ -2,7 +2,7 @@ import dataclasses
 from typing import Tuple, Optional, List, NamedTuple, Dict, ClassVar, Any
 import abc
 from dataclasses import dataclass
-import json
+from apf.osmnx_provider import OSMNXProvider
 
 
 @dataclass()
@@ -84,6 +84,13 @@ class OptionFieldRange(OptionField):
 
 
 class PlannerInterface(abc.ABC):
+    def __init__(self, provider: OSMNXProvider):
+        self._provider: OSMNXProvider = provider
+
+    @property
+    def provider(self):
+        return self._provider
+
     @classmethod
     @abc.abstractmethod
     def internal_name(cls) -> str:
