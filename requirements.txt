@@ -6,3 +6,4 @@ jsonschema
 networkx
 setuptools
 scikit-learn
+geopy
