@@ -4,6 +4,7 @@ from typing import Dict, Optional, List, Callable, Tuple, Any
 import osmnx as ox
 import pickle
 import tempfile
+import atexit
 
 # Make sure we have a default cache dir
 DEFAULT_CACHE_DIR = f'{tempfile.gettempdir()}/apf_cache/'
@@ -11,6 +12,23 @@ os.makedirs(DEFAULT_CACHE_DIR, exist_ok=True)
 
 # TODO: we might want to invalidate the cache ever so often
 ox.config(use_cache=True, cache_folder=f'{DEFAULT_CACHE_DIR}/osmnx_cache/')
+
+
+# A hack to support saving on __del__:
+#  __del__ might be called after everything has been torn down, hence you can't really do much there.
+#  This little trick lets us check if that's the case, so we can avoid calling potentially crashing stuff.
+_shutting_down_flag = [False]
+
+
+def _set_shutting_down():
+    _shutting_down_flag[0] = True
+
+
+def _is_shutting_down(_shutting_down_flag=_shutting_down_flag):
+    return _shutting_down_flag[0]
+
+
+atexit.register(_set_shutting_down)
 
 
 class OSMNXProvider:
@@ -24,6 +42,16 @@ class OSMNXProvider:
         self._cache_path: str = cache_path
         self._cache_duration_seconds: int = cache_duration_seconds
         self._cache: Dict[Tuple, Any] = dict()
+
+        # Try loading the previous values
+        self.load()
+
+        # Make sure to save at the end
+        atexit.register(self.save)
+
+    def __del__(self, _is_shutting_down=_is_shutting_down):
+        if not _is_shutting_down():
+            self.save()
 
     def wrap(self, func: Callable, *args, **kwargs):
         """Caches a function call based on its arguments"""
