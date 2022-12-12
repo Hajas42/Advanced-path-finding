@@ -3,7 +3,7 @@ import jsonschema
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
 from .geocoding.nominatim_geocoder import NominatimGeocoder
-from .planning import PlannerInterface, DrunkPilotPlanner
+from .planning import PlannerInterface, DrunkPilotPlanner, TouristRoutePlanner
 
 
 app = Flask(__name__, template_folder="./templates")
@@ -11,7 +11,9 @@ app = Flask(__name__, template_folder="./templates")
 geocoder = NominatimGeocoder()
 planners: Dict[str, PlannerInterface] = {}
 planner_drunk = DrunkPilotPlanner()
+tourist_route_planner = TouristRoutePlanner()
 planners[planner_drunk.internal_name()] = planner_drunk
+planners[tourist_route_planner.internal_name()] = tourist_route_planner
 
 
 @app.route("/api/geocoding", methods=["GET"])
