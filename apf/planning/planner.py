@@ -4,6 +4,7 @@ import abc
 from dataclasses import dataclass
 import json
 import osmnx as ox
+from apf.osmnx_provider import OSMNXProvider
 
 
 @dataclass()
@@ -14,6 +15,11 @@ class OptionField:
     name: str
     display_name: str
     description: str
+
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        """Check whether the value is valid for the field."""
+        raise NotImplementedError
 
 
 @dataclass()
@@ -30,6 +36,14 @@ class OptionFieldSelect(OptionField):
     values: List[OptionFieldSelectOption]
     default_value: Optional[str]
 
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type) and value in (x.name for x in self.values)
+
+    def __post_init__(self):
+        if len(self.values) != len(set((x.name for x in self.values))):
+            raise ValueError("values must be unique")
+
 
 @dataclass()
 class OptionFieldCheckbox(OptionField):
@@ -37,6 +51,10 @@ class OptionFieldCheckbox(OptionField):
     value_type = bool
 
     default_value: Optional[bool]
+
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type)
 
 
 @dataclass()
@@ -48,6 +66,10 @@ class OptionFieldNumber(OptionField):
     max_value: int
     default_value: Optional[int]
 
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type) and self.min_value <= value <= self.max_value
+
 
 @dataclass()
 class OptionFieldRange(OptionField):
@@ -58,8 +80,19 @@ class OptionFieldRange(OptionField):
     max_value: int
     default_value: Optional[int]
 
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type) and self.min_value <= value <= self.max_value
+
 
 class PlannerInterface(abc.ABC):
+    def __init__(self, provider: OSMNXProvider):
+        self._provider: OSMNXProvider = provider
+
+    @property
+    def provider(self):
+        return self._provider
+
     @classmethod
     @abc.abstractmethod
     def internal_name(cls) -> str:
