@@ -31,8 +31,24 @@ def _is_shutting_down(_shutting_down_flag=_shutting_down_flag):
 atexit.register(_set_shutting_down)
 
 
+def _make_hash_dict(kwds):
+    return tuple(
+        tuple(_make_hash_dict(x) if isinstance(x, dict) else x for x in item)
+        for item in kwds.items()
+    )
+
+
+def _make_hash_args(args):
+    return tuple(
+        tuple(_make_hash_dict(x) if isinstance(x, dict) else x for x in item)
+        for item in args
+    )
+
+
 class OSMNXProvider:
     """A memoizing wrapper mostly for osmnx"""
+
+    # TODO: versioning
 
     def __init__(
             self,
@@ -70,7 +86,7 @@ class OSMNXProvider:
         """Caches a function call based on its arguments"""
 
         ct = int(time.time())
-        key = (args, frozenset(kwargs.items()))
+        key = _make_hash_args(args) + _make_hash_dict(kwargs)
         if key in self._cache:
             tt, val = self._cache[key]
             if tt + self._cache_duration_seconds > ct:
