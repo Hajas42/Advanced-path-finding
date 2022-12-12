@@ -182,7 +182,7 @@ def safest_weight(source, target, d, dir, prev_node=None):
     return (danger_rate * edge["length"]) / max_speed(edge)
 
 #endregion
-"""
+
 #region Robust
 
 dbip="84.3.12.243"
@@ -306,7 +306,7 @@ for item in StoredIncidents():
 add_robustness(G, data_lon, data_lat, data_robust)
 
 #endregion
-"""
+
 class SafestPlanner(planner.PlannerInterface):
     _OPTIONS = []
     @classmethod
@@ -343,8 +343,8 @@ class SafestPlanner(planner.PlannerInterface):
         return route_coordinates
 
 
-"""
 class RobustPlanner(planner.PlannerInterface):
+    _OPTIONS = []
     @classmethod
     def internal_name(cls) -> str:
         return "robust_planner"
@@ -360,6 +360,9 @@ class RobustPlanner(planner.PlannerInterface):
     def __init__(self):
         pass
 
+    @classmethod
+    def fields_schema(cls) -> List[planner.OptionField]:
+        return cls._OPTIONS
     # def get_option_descriptions(self) -> List[PlannerOptionDescription]:
     #     pass
     #
@@ -367,11 +370,10 @@ class RobustPlanner(planner.PlannerInterface):
     #     pass
 
     def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[List[Tuple[float, float]]]:
-        source_node = ox.nearest_nodes(G, coord_from[0], coord_from[1], return_dist=False)
-        target_node = ox.nearest_nodes(G, coord_to[0], coord_to[1], return_dist=False)
+        source_node = ox.nearest_nodes(G, coord_from[1], coord_from[0], return_dist=False)
+        target_node = ox.nearest_nodes(G, coord_to[1], coord_to[0], return_dist=False)
         route = bidirectional_dijstra(G, source_node, target_node, weight=robust_weight)
 
-        route_coordinates = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in route]
+        route_coordinates = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in route[1]]
 
         return route_coordinates
-"""

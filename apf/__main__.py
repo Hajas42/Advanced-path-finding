@@ -3,7 +3,7 @@ import jsonschema
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
 from .geocoding.nominatim_geocoder import NominatimGeocoder
-from .planning import PlannerInterface, DrunkPilotPlanner, SafestPlanner
+from .planning import PlannerInterface, DrunkPilotPlanner, SafestPlanner, RobustPlanner
 
 
 app = Flask(__name__, template_folder="./templates")
@@ -15,6 +15,9 @@ planners[planner_drunk.internal_name()] = planner_drunk
 
 planner_safe = SafestPlanner()
 planners[planner_safe.internal_name()] = planner_safe
+
+planner_robust =RobustPlanner()
+planners[planner_robust.internal_name()] = planner_robust
 
 
 @app.route("/api/geocoding", methods=["GET"])
