@@ -6,7 +6,7 @@ import osmnx.geometries
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
 from .geocoding.nominatim_geocoder import NominatimGeocoder
-from .planning import PlannerInterface, DrunkPilotPlanner, TouristRoutePlanner
+from .planning import PlannerInterface, DrunkPilotPlanner, SafestPlanner, TouristRoutePlanner
 from .osmnx_provider import OSMNXProvider
 
 
@@ -31,6 +31,7 @@ def register_planner(planner):
 
 
 register_planner(DrunkPilotPlanner(provider))
+register_planner(SafestPlanner(provider))
 register_planner(TouristRoutePlanner(provider))
 
 # ---------------------------------------------
