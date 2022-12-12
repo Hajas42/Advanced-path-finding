@@ -7,3 +7,4 @@ networkx
 setuptools
 scikit-learn
 geopandas
+pytest
