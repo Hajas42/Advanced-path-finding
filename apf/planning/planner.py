@@ -14,6 +14,11 @@ class OptionField:
     display_name: str
     description: str
 
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        """Check whether the value is valid for the field."""
+        raise NotImplementedError
+
 
 @dataclass()
 class OptionFieldSelectOption:
@@ -29,6 +34,14 @@ class OptionFieldSelect(OptionField):
     values: List[OptionFieldSelectOption]
     default_value: Optional[str]
 
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type) and value in (x.name for x in self.values)
+
+    def __post_init__(self):
+        if len(self.values) != len(set((x.name for x in self.values))):
+            raise ValueError("values must be unique")
+
 
 @dataclass()
 class OptionFieldCheckbox(OptionField):
@@ -36,6 +49,10 @@ class OptionFieldCheckbox(OptionField):
     value_type = bool
 
     default_value: Optional[bool]
+
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type)
 
 
 @dataclass()
@@ -47,6 +64,10 @@ class OptionFieldNumber(OptionField):
     max_value: int
     default_value: Optional[int]
 
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type) and self.min_value <= value <= self.max_value
+
 
 @dataclass()
 class OptionFieldRange(OptionField):
@@ -56,6 +77,10 @@ class OptionFieldRange(OptionField):
     min_value: int
     max_value: int
     default_value: Optional[int]
+
+    @abc.abstractmethod
+    def validate_value(self, value) -> bool:
+        return isinstance(value, self.value_type) and self.min_value <= value <= self.max_value
 
 
 class PlannerInterface(abc.ABC):
