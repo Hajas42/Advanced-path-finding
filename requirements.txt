@@ -3,3 +3,5 @@ Jinja2
 requests
 osmnx
 jsonschema
+networkx
+setuptools
