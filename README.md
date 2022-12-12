@@ -37,3 +37,11 @@ Disclaimer: this project is for a university assignment.
     apf-server
     ```
 3. Open the link in your browser
+
+## Testing:
+
+To run the unit tests:
+```sh
+cd tests
+python -m pytest test_flask.py
+```
