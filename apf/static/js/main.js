@@ -674,6 +674,9 @@ var mapWrapper = (function() {
                 let planner = PlannerOptions.plannerOptions.get(selectValue);
                 if (planner.is_empty()) {
                     PlannerOptions._hideWithReason("This planner does not have any options");
+                    if (PlannerOptions._selectedPlannerOptions !== null)
+                        PlannerOptions._selectedPlannerOptions.hide();
+                    PlannerOptions._selectedPlannerOptions = planner;
                 } else {
                     PlannerOptions.plannerOptionsContainer.removeClass("sidebar-placeholder-force");
                     planner.show();
@@ -919,8 +922,10 @@ var mapWrapper = (function() {
 
         // Block the button temporarely
         buttonPlan.prop('disabled', true);
+        console.log("Requested plan");
         requestPlan(from, to, _plannerOptions.name, _plannerOptions.valuesToJson(),
             function (result){
+                console.log("Got plan",result);
                 if (result["status"] === "ok") {
                     let description = `A route from '${fromName}' to '${toName}' using the planner named '${_plannerOptions.displayName}'.`
                     Route.addRoute(`${_plannerOptions.displayName} #${routeCounter++}`, result["coords"], description);
