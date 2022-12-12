@@ -8,6 +8,7 @@ from typing import Dict, Tuple
 from .geocoding.nominatim_geocoder import NominatimGeocoder
 from .planning import PlannerInterface, DrunkPilotPlanner, SafestPlanner, RobustPlanner, TouristRoutePlanner
 from .osmnx_provider import OSMNXProvider
+from .config import cfg
 
 
 app = Flask(__name__, template_folder="./templates")
@@ -29,8 +30,9 @@ planners: Dict[str, PlannerInterface] = {}
 def register_planner(planner):
     planners[planner.internal_name()] = planner
 
+if (cfg.in_development):
+    register_planner(DrunkPilotPlanner(provider))
 
-register_planner(DrunkPilotPlanner(provider))
 register_planner(SafestPlanner(provider))
 register_planner(RobustPlanner(provider))
 register_planner(TouristRoutePlanner(provider))

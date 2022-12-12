@@ -12,6 +12,7 @@ from apf.osmnx_provider import OSMNXProvider
 from dataclasses import dataclass
 
 from . import planner
+from ..config import cfg
 
 
 def _weight_function(G, weight):
@@ -246,7 +247,7 @@ class SafestPlanner(planner.PlannerInterface):
 
     def __init__(self, provider: OSMNXProvider):
         super().__init__(provider)
-        place = 'Hungary, Budapest'
+        place = cfg.default_map
         self._G: nx.MultiDiGraph = self.provider.wrap(ox.graph_from_place, place, network_type='drive')
 
     @staticmethod
@@ -302,14 +303,13 @@ class RobustPlanner(planner.PlannerInterface):
 
     def __init__(self, provider: OSMNXProvider):
         super().__init__(provider)
-        place = 'Hungary, Budapest'
+        place = cfg.default_map
         self._G: nx.MultiDiGraph = self.provider.wrap(ox.graph_from_place, place, network_type='drive')
 
         # Budapest: 47.35, 18.8, 47.60, 19.4
         # Hungary: 45.74, 16.11, 48.58, 22.9
         self._incident_provider = IncidentProvider()
-        self._incident_provider.fetch_incidents(47.35, 18.8, 47.60, 19.4)
-        # self._incident_provider.fetch_incidents(45.74, 16.11, 48.58, 22.9)
+        self._incident_provider.fetch_incidents(cfg.coordinates_for_incidents[0],cfg.coordinates_for_incidents[1],cfg.coordinates_for_incidents[2],cfg.coordinates_for_incidents[3])
         self._add_robustness(*self._incident_provider.get_incidents())
 
     @classmethod

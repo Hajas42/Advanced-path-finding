@@ -7,6 +7,7 @@ import geopandas as gpd
 from typing import Tuple, Dict, List, Optional
 from apf.osmnx_provider import OSMNXProvider
 
+from ..config import cfg
 from . import planner
 
 
@@ -42,7 +43,7 @@ class TouristRoutePlanner(planner.PlannerInterface):
 
     def __init__(self, provider: OSMNXProvider):
         super().__init__(provider)
-        place = 'Hungary, Budapest'
+        place = cfg.default_map
         self._G: nx.MultiDiGraph = self.provider.wrap(ox.graph_from_place, place, network_type='drive')
         self._places: gpd.GeoDataFrame = self.provider.wrap(ox.geometries.geometries_from_place, query=place, tags={'tourism': True})
 
