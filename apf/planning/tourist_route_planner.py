@@ -1,7 +1,11 @@
 import math
 import networkx as nx
 import osmnx as ox
+import osmnx.geometries
+import osmnx.geocoder
+import geopandas as gpd
 from typing import Tuple, Dict, List, Optional
+from apf.osmnx_provider import OSMNXProvider
 
 from . import planner
 
@@ -36,8 +40,12 @@ class TouristRoutePlanner(planner.PlannerInterface):
     def fields_schema(cls) -> List[planner.OptionField]:
         return cls._OPTIONS
 
-    def __init__(self, G: nx.MultiDiGraph = ox.graph_from_place('Budapest', network_type='drive')):
-        self._G = G
+    def __init__(self, provider: OSMNXProvider):
+        super().__init__(provider)
+        place = 'Hungary, Budapest'
+        self._G: nx.MultiDiGraph = self.provider.wrap(ox.graph_from_place, place, network_type='drive')
+        self._places: gpd.GeoDataFrame = self.provider.wrap(ox.geometries.geometries_from_place, query=place, tags={'tourism': True})
+
 
     @staticmethod
     def __generate_key(tourist_place_details):
@@ -75,6 +83,17 @@ class TouristRoutePlanner(planner.PlannerInterface):
             # print(str(ex) + "\n" + str(tourist_place))
             return -1
 
+    def _get_tourist_places(self, coords, radius):
+        # https://epsg.io/...
+        # epsg:4237 = hungary degree
+        # epsg:4326 = world degree
+        # epsg:23700 = hungary in meters
+
+        original_crs = self._places.crs
+        gdf_meter = self._places.to_crs(23700)
+        gdf_pt = gpd.GeoDataFrame(geometry=gpd.points_from_xy((coords[0],), (coords[1],)), crs=4326).to_crs(23700)
+        return gdf_meter[gdf_meter.within(gdf_pt.geometry[0].buffer(radius))].to_crs(original_crs)
+
     def __calculate_tourist_route(self, source: Tuple[float, float], target: Tuple[float, float], max_dist: int = 1000,
                                   max_tourist_places: int = 5):
         source_node = ox.nearest_nodes(self._G, source[1], source[0])
@@ -85,8 +104,7 @@ class TouristRoutePlanner(planner.PlannerInterface):
         evaluated_tourist_places = set()
         index = 0
         for node in route:
-            tourist_places = ox.geometries.geometries_from_point((self._G.nodes[node]['y'], self._G.nodes[node]['x']),
-                                                                 tags={'tourism': True}, dist=max_dist)
+            tourist_places = self._get_tourist_places((self._G.nodes[node]['x'], self._G.nodes[node]['y']), max_dist)
             for tourist_place in tourist_places.iterrows():
                 key = TouristRoutePlanner.__generate_key(tourist_place[1])
                 if key not in evaluated_tourist_places:
@@ -121,18 +139,9 @@ class TouristRoutePlanner(planner.PlannerInterface):
 
     def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[
                 List[Tuple[float, float]]]:
-        max_dist = next((option.default_value for option in self.fields_schema() if option.name == 'max_dist'), None)
-        if 'max_dist' in options.keys():
-            max_dist = options['max_dist']
-
-        max_tourist_places = next(
-            (option.default_value for option in self.fields_schema() if option.name == 'max_tourist_places'), None)
-        if 'max_tourist_places' in options.keys():
-            max_tourist_places = options['max_tourist_places']
-
         ret = []
-        route_nodes = self.__calculate_tourist_route(source=coord_from, target=coord_to, max_dist=max_dist,
-                                                     max_tourist_places=max_tourist_places)
+        route_nodes = self.__calculate_tourist_route(source=coord_from, target=coord_to, max_dist=options['max_dist'],
+                                                     max_tourist_places=options['max_tourist_places'])
         for node in route_nodes:
             ret.append((self._G.nodes[node]['y'], self._G.nodes[node]['x']))
 
