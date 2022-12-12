@@ -7,17 +7,25 @@ import numpy as np
 from heapq import heappop, heappush
 from itertools import count
 import requests
-import geocoder
-import mysql.connector #pip-hez mysql-connector-python
-from typing import Tuple, Dict, List, Optional
+from typing import Tuple, Dict, List, Optional, Any
+from apf.osmnx_provider import OSMNXProvider
+from dataclasses import dataclass
 
 from . import planner
 
-#region Both
 
-G = ox.graph_from_place('Budapest', network_type='drive')
+def _weight_function(G, weight):
+    if callable(weight):
+        return weight
+    # If the weight keyword argument is not callable, we assume it is a
+    # string representing the edge attribute containing the weight of
+    # the edge.
+    if G.is_multigraph():
+        return lambda u, v, d: min(attr.get(weight, 1) for attr in d.values())
+    return lambda u, v, data: data.get(weight, 1)
 
-def bidirectional_dijstra(G, source, target, weight="weight"):
+
+def bidirectional_dijkstra(G, source, target, weight="weight"):
     if source not in G or target not in G:
         msg = f"Either source {source} or target {target} is not in G"
         raise nx.NodeNotFound(msg)
@@ -28,7 +36,7 @@ def bidirectional_dijstra(G, source, target, weight="weight"):
     weight = _weight_function(G, weight)
     push = heappush
     pop = heappop
-    # Init:  [Forward, Backward]ű
+    # Init:  [Forward, Backward]
     dists = [{}, {}]  # dictionary of final distances
     paths = [{source: [source]}, {target: [target]}]  # dictionary of paths
     fringe = [[], []]  # heap of (distance, node) for choosing node to expand
@@ -42,7 +50,7 @@ def bidirectional_dijstra(G, source, target, weight="weight"):
         neighs = [G._succ, G._pred]
     else:
         neighs = [G._adj, G._adj]
-    # variables to hold shortest discovered path
+    # variables to hold the shortest discovered path
     # finaldist = 1e30000
     finalpath = []
     dir = 1
@@ -66,15 +74,15 @@ def bidirectional_dijstra(G, source, target, weight="weight"):
             # weight(v, w, d) for forward and weight(w, v, d) for back direction
             if dir == 0:
                 if v in paths[dir] and len(paths[dir][v]) > 1:
-                    cost = weight(v, w, d, dir, paths[dir][v][-2])
+                    cost = weight(G, v, w, d, dir, paths[dir][v][-2])
                 else:
-                    cost = weight(v, w, d, dir)
+                    cost = weight(G, v, w, d, dir)
             else:
                 if w in paths[dir] and len(paths[dir][w]) > 1:
-                    cost = weight(w, v, d, dir, paths[dir][w][-2])
+                    cost = weight(G, w, v, d, dir, paths[dir][w][-2])
                 else:
-                    cost = weight(w, v, d, dir)
-                    
+                    cost = weight(G, w, v, d, dir)
+
             if cost is None:
                 continue
             vwLength = dists[dir][v] + cost
@@ -96,219 +104,130 @@ def bidirectional_dijstra(G, source, target, weight="weight"):
                         revpath.reverse()
                         finalpath = paths[0][w] + revpath[1:]
     raise nx.NetworkXNoPath(f"No path between {source} and {target}.")
-    
-def _weight_function(G, weight):
-    
-    if callable(weight):
-        return weight
-    # If the weight keyword argument is not callable, we assume it is a
-    # string representing the edge attribute containing the weight of
-    # the edge.
-    if G.is_multigraph():
-        return lambda u, v, d: min(attr.get(weight, 1) for attr in d.values())
-    return lambda u, v, data: data.get(weight, 1)
 
-#endregion
-
-#region Safe
 
 city_highways = ['living_street', 'primary', 'primary_link', 'residential',
                  'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified']
+
 
 def is_city(edge):
     if "highway" in edge and edge["highway"] in city_highways:
         return True
     return False
 
-def getAngle(a, b, c):
-    ang = math.degrees(math.atan2(c[1]-b[1], c[0]-b[0]) - math.atan2(a[1]-b[1], a[0]-b[0]))
+
+def get_angle(a, b, c):
+    ang = math.degrees(math.atan2(c[1] - b[1], c[0] - b[0]) - math.atan2(a[1] - b[1], a[0] - b[0]))
     return ang + 360 if ang < 0 else ang
 
-def is_left_turn(source, mid, target):
+
+def is_left_turn(G, source, mid, target):
     source_node = G.nodes[source]
     mid_node = G.nodes[mid]
     target_node = G.nodes[target]
-    
-    return 225 < getAngle(
+
+    return 225 < get_angle(
         (source_node['x'], source_node['y']),
         (mid_node['x'], mid_node['y']),
         (target_node['x'], target_node['y']),
-        )
+    )
 
-def crossroad_without_traffic_signal(node):
+
+def crossroad_without_traffic_signal(G, node):
     return len(G._adj[node]) > 3 and ("highway" in G.nodes[node] and G.nodes[node]["highway"] != "traffic_signals")
+
 
 def is_roundabout(node):
     return "junction" in node and node["junction"] == "roundabout"
 
-def max_speed(edge):
-    maxspeed = 0
 
+@dataclass()
+class IncidentEntry:
+    inc_id: int
+    severity: int
+    inc_type: int
+    shortDesc: str
+    lat: float
+    lng: float
+
+
+class IncidentProvider:
+    def __init__(self):
+        self._incidents: List[IncidentEntry] = list()
+
+    def clear(self):
+        self._incidents.clear()
+
+    def fetch_incidents(self, a, b, c, d):
+        url = "http://www.mapquestapi.com/traffic/v2/incidents"
+        mapquest_key = "BGFBW3Gk3NZNBbDdk6MUM3zEoadG1lDC"
+        bounding_box = "{},{},{},{}".format(a, b, c, d)
+        filters = "construction,incidents"
+
+        # sending get request and saving the response as response object
+        r = requests.get(url=url, params={
+            'key': mapquest_key,
+            'boundingBox': bounding_box,
+            'filters': filters
+        })
+
+        # extracting data in json format
+        data = r.json()
+        for inc in data['incidents']:
+            inc_id = int(inc['id'])
+            self._incidents.append(IncidentEntry(
+                inc_id, inc['severity'], inc['type'], inc['shortDesc'], inc['lat'], inc['lng']
+            ))
+
+    def get_incidents(self) -> Tuple[List[float], List[float], List[float]]:
+        def _float_cmp(a, b) -> int:
+            d = a - b
+            if abs(d) < 0.001:
+                return 0
+            return (1, -1)[a < b]
+
+        def _is_close_point(x, y) -> bool:
+            return _float_cmp(x.lat, y.lat) == 0 and _float_cmp(x.lng, y.lng) == 0
+
+        ordered_incidents = sorted(self._incidents, key=lambda k: [k.lat, k.lng])
+        length = len(ordered_incidents)
+
+        res_lat, res_lng, res_severity = list(), list(), list()
+        i = 0
+        while i < length:
+            sevevity = ordered_incidents[i].severity
+            lat = ordered_incidents[i].lat
+            lng = ordered_incidents[i].lng
+            j = i
+            i += 1
+            while i < length and _is_close_point(ordered_incidents[i], ordered_incidents[j]):
+                sevevity += ordered_incidents[i].severity
+                i += 1
+            res_lat.append(lat)
+            res_lng.append(lng)
+            res_severity.append(sevevity)
+        return res_lat, res_lng, res_severity
+
+
+def max_speed(edge):
+    """Retrieves the speed limit for an edge"""
+
+    maxspeed = 0
     if "maxspeed" in edge:
-        if type(edge["maxspeed"])==list:
+        if type(edge["maxspeed"]) == list:
             maxspeed = int(edge["maxspeed"][0])
         else:
             maxspeed = int(edge["maxspeed"])
-
     elif is_city(edge):
-        maxspeed =  50
-
+        maxspeed = 50
     else:
         maxspeed = 90
-
     return maxspeed
 
-def safest_weight(source, target, d, dir, prev_node=None):
-    edge = d[0]
-    danger_rate = 1
-    
-    hour = int(time.strftime("%H"))
-    
-    if is_city(edge) and hour > 6 and hour < 20 or not is_city(edge) and (hour <= 6 or hour >= 20):
-        danger_rate *= 2
-    
-    
-    if prev_node != None:
-        if dir == 0:
-            if (is_left_turn(prev_node, source, target) and not is_roundabout(edge)):
-                danger_rate *= 100
-        else:
-            if (is_left_turn(target, source, prev_node) and not is_roundabout(edge)):
-                danger_rate *= 100
-                
-    if (crossroad_without_traffic_signal(target) and not is_roundabout(edge)):
-        danger_rate *= 100
-
-    return (danger_rate * edge["length"]) / max_speed(edge)
-
-#endregion
-
-#region Robust
-
-dbip="84.3.12.243"
-
-incdb = mysql.connector.connect(
-host=dbip,
-user="user",
-password="1234",
-database="incdatabase"
-)
-inccursor = incdb.cursor()
-
-inccursor.execute("SELECT lat, lng, severity FROM incident ORDER BY lat")
-    
-st = inccursor.fetchall()
-incdb.close()
-
-def storeIncidents(a, b, c, d):
-
-    incdb = mysql.connector.connect(
-    host=dbip,
-    user="user",
-    password="1234",
-    database="incdatabase"
-    )
-    inccursor = incdb.cursor()
-    
-    inccursor.execute("SELECT id FROM incident")
-
-    storedincidents = inccursor.fetchall()
-    
-    sql = "INSERT INTO incident (id, severity, type, shortDesc, lat, lng ) VALUES (%s, %s, %s, %s, %s, %s)"
-    
-    URL = "http://www.mapquestapi.com/traffic/v2/incidents"
-    mapquestKey = "BGFBW3Gk3NZNBbDdk6MUM3zEoadG1lDC"
-    #budapest
-    Box = "{},{},{},{}".format(a,b,c,d)
-    Filter = "construction,incidents"
-
-    # defining a params dict for the parameters to be sent to the API
-    PARAMS = {'key':mapquestKey,'boundingBox':Box,'filters':Filter}
-
-    # sending get request and saving the response as response object
-    r = requests.get(url = URL, params = PARAMS)
-
-    # extracting data in json format
-    data = r.json()
-    for inc in data['incidents']:
-        found = 0
-        for stored in storedincidents:
-            if stored[0].find(inc['id']) != -1:
-
-                found = 1
-        if found == 0:
-            val = (inc['id'], inc['severity'], inc['type'], inc['shortDesc'],inc['lat'],inc['lng'])
-            inccursor.execute(sql, val)
-    incdb.commit()
-    incdb.close()
-    return data
-
-incidents = storeIncidents(47.35, 18.8, 47.60, 19.4)
-
-def samepoint(x1,x2,y1,y2):
-    if abs(float(x1)-float(x2)) < 0.001 and abs(float(y1)-float(y2)) < 0.001:
-        return True
-    else:
-        return False
-
-def StoredIncidents():
-    incdb = mysql.connector.connect(
-    host=dbip,
-    user="user",
-    password="1234",
-    database="incdatabase"
-    )
-    inccursor = incdb.cursor()
-
-    inccursor.execute("SELECT lat, lng, severity FROM incident ORDER BY lat")
-    
-    storedincidents = inccursor.fetchall()
-    x = 0 
-    list = []
-    while x < len(storedincidents):
-        sev = int(storedincidents[x][2])
-        i = 1
-        samepotential = True
-        while x+i < len(storedincidents) and samepotential:
-            if samepoint(storedincidents[x][0],storedincidents[x+i][0],storedincidents[x][1],storedincidents[x+i][1]):
-                sev += int(storedincidents[x+i][2])
-                i+=1
-            else:
-                samepotential = False
-        list.append(tuple((storedincidents[x][0], storedincidents[x][1],sev)))
-        x+=i
-    incdb.close()
-    return list
-
-def add_robustness(Graph, longitudes, latitudes, robustnesses):
-    nodes = ox.nearest_nodes(Graph, longitudes, latitudes)
-    for i in range(0,len(nodes)):
-        for pred_node in Graph.predecessors(nodes[i]):
-            Graph[pred_node][nodes[i]][0].update({"robustness":robustnesses[i]})
-
-def robust_weight(source, target, d, dir, prev_node=None):
-    edge = d[0]
-    robustness = 1
-
-    if "robustness" in edge:
-        robustness += edge["robustness"]
-
-    return (robustness * edge["length"]) / max_speed(edge)
-
-data_lon = []
-data_lat = []
-data_robust = []
-for item in StoredIncidents():
-    data_lon.append(float(item[0]))
-    data_lat.append(float(item[1]))
-    data_robust.append(int(item[2]))
-
-add_robustness(G, data_lon, data_lat, data_robust)
-
-#endregion
 
 class SafestPlanner(planner.PlannerInterface):
     _OPTIONS = []
+
     @classmethod
     def internal_name(cls) -> str:
         return "safest_planner"
@@ -325,26 +244,43 @@ class SafestPlanner(planner.PlannerInterface):
     def fields_schema(cls) -> List[planner.OptionField]:
         return cls._OPTIONS
 
-    def __init__(self):
-        pass
+    def __init__(self, provider: OSMNXProvider):
+        super().__init__(provider)
+        place = 'Hungary, Budapest'
+        self._G: nx.MultiDiGraph = self.provider.wrap(ox.graph_from_place, place, network_type='drive')
 
-    # def get_option_descriptions(self) -> List[PlannerOptionDescription]:
-    #     pass
-    #
-    # def get_default_options(self) -> List[PlannerOptionDescription]:
-    #     pass
+    @staticmethod
+    def safest_weight(G, source, target, d, direction, prev_node=None):
+        edge = d[0]
+        danger_rate = 1
+        hour = int(time.strftime("%H"))
+        if is_city(edge) and 6 < hour < 20 or not is_city(edge) and (hour <= 6 or hour >= 20):
+            danger_rate *= 2
+        if prev_node is not None:
+            if direction == 0:
+                if is_left_turn(G, prev_node, source, target) and not is_roundabout(edge):
+                    danger_rate *= 100
+            else:
+                if is_left_turn(G, target, source, prev_node) and not is_roundabout(edge):
+                    danger_rate *= 100
+        if crossroad_without_traffic_signal(G, target) and not is_roundabout(edge):
+            danger_rate *= 100
 
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[List[Tuple[float, float]]]:
-        source_node = ox.nearest_nodes(G, coord_from[1], coord_from[0], return_dist=False)
-        target_node = ox.nearest_nodes(G, coord_to[1], coord_to[0], return_dist=False)
-        route = bidirectional_dijstra(G, source_node, target_node, weight=safest_weight)
-        route_coordinates = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in route[1]]
+        return (danger_rate * edge["length"]) / max_speed(edge)
+
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[
+        List[Tuple[float, float]]]:
+        source_node = ox.nearest_nodes(self._G, coord_from[1], coord_from[0], return_dist=False)
+        target_node = ox.nearest_nodes(self._G, coord_to[1], coord_to[0], return_dist=False)
+        route = bidirectional_dijkstra(self._G, source_node, target_node, weight=SafestPlanner.safest_weight)
+        route_coordinates = [(self._G.nodes[node]['y'], self._G.nodes[node]['x']) for node in route[1]]
 
         return route_coordinates
 
 
 class RobustPlanner(planner.PlannerInterface):
     _OPTIONS = []
+
     @classmethod
     def internal_name(cls) -> str:
         return "robust_planner"
@@ -357,23 +293,43 @@ class RobustPlanner(planner.PlannerInterface):
     def description(cls) -> str:
         return "Plans the most robust route between two points."
 
-    def __init__(self):
-        pass
+    def _add_robustness(self, longitudes, latitudes, robustnesses):
+        nodes = ox.nearest_nodes(self._G, longitudes, latitudes)
+        for i in range(0, len(nodes)):
+            for pred_node in self._G.predecessors(nodes[i]):
+                self._G[pred_node][nodes[i]][0].update({"robustness": robustnesses[i]})
+
+    def __init__(self, provider: OSMNXProvider):
+        super().__init__(provider)
+        place = 'Hungary, Budapest'
+        self._G: nx.MultiDiGraph = self.provider.wrap(ox.graph_from_place, place, network_type='drive')
+
+        # Budapest: 47.35, 18.8, 47.60, 19.4
+        # Hungary: 45.74, 16.11, 48.58, 22.9
+        self._incident_provider = IncidentProvider()
+        self._incident_provider.fetch_incidents(47.35, 18.8, 47.60, 19.4)
+        # self._incident_provider.fetch_incidents(45.74, 16.11, 48.58, 22.9)
+        self._add_robustness(*self._incident_provider.get_incidents())
 
     @classmethod
     def fields_schema(cls) -> List[planner.OptionField]:
         return cls._OPTIONS
-    # def get_option_descriptions(self) -> List[PlannerOptionDescription]:
-    #     pass
-    #
-    # def get_default_options(self) -> List[PlannerOptionDescription]:
-    #     pass
 
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[List[Tuple[float, float]]]:
-        source_node = ox.nearest_nodes(G, coord_from[1], coord_from[0], return_dist=False)
-        target_node = ox.nearest_nodes(G, coord_to[1], coord_to[0], return_dist=False)
-        route = bidirectional_dijstra(G, source_node, target_node, weight=robust_weight)
+    @staticmethod
+    def robust_weight(G, source, target, d, direction, prev_node=None):
+        edge = d[0]
+        robustness = 1
+        if "robustness" in edge:
+            robustness += edge["robustness"]
+        return (robustness * edge["length"]) / max_speed(edge)
 
-        route_coordinates = [(G.nodes[node]['y'], G.nodes[node]['x']) for node in route[1]]
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[
+        List[Tuple[float, float]]]:
+        source_node = ox.nearest_nodes(self._G, coord_from[1], coord_from[0], return_dist=False)
+        target_node = ox.nearest_nodes(self._G, coord_to[1], coord_to[0], return_dist=False)
+        route = bidirectional_dijkstra(self._G, source_node, target_node, weight=RobustPlanner.robust_weight)
+
+        route_coordinates = [(self._G.nodes[node]['y'], self._G.nodes[node]['x']) for node in route[1]]
 
         return route_coordinates
+
