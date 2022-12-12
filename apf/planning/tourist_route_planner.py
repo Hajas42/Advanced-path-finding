@@ -9,12 +9,12 @@ from . import planner
 class TouristRoutePlanner(planner.PlannerInterface):
     _OPTIONS = [
         planner.OptionFieldNumber(
-            name="max_dist", display_name="Maximum distance",
+            name="max_dist", display_name="Max distance",
             description="Maximum distance from the original route in meters", min_value=10,
-            max_value=10000, default_value=1000
+            max_value=10000, default_value=500
         ),
         planner.OptionFieldNumber(
-            name="max_tourist_places", display_name="Maximum number of tourist places",
+            name="max_tourist_places", display_name="Max tourist places",
             description="Maximum number of tourist places to include", min_value=0,
             max_value=50, default_value=5
         )
@@ -75,10 +75,10 @@ class TouristRoutePlanner(planner.PlannerInterface):
             # print(str(ex) + "\n" + str(tourist_place))
             return -1
 
-    def __calculate_tourism_route(self, source: Tuple[float, float], target: Tuple[float, float], max_dist: int = 1000,
+    def __calculate_tourist_route(self, source: Tuple[float, float], target: Tuple[float, float], max_dist: int = 1000,
                                   max_tourist_places: int = 5):
-        source_node = ox.nearest_nodes(self._G, source[0], source[1])
-        target_node = ox.nearest_nodes(self._G, target[0], target[1])
+        source_node = ox.nearest_nodes(self._G, source[1], source[0])
+        target_node = ox.nearest_nodes(self._G, target[1], target[0])
         route = nx.shortest_path(self._G, source_node, target_node)
         heuristic_values = {}
 
@@ -131,7 +131,7 @@ class TouristRoutePlanner(planner.PlannerInterface):
             max_tourist_places = options['max_tourist_places']
 
         ret = []
-        route_nodes = self.__calculate_tourism_route(source=coord_from, target=coord_to, max_dist=max_dist,
+        route_nodes = self.__calculate_tourist_route(source=coord_from, target=coord_to, max_dist=max_dist,
                                                      max_tourist_places=max_tourist_places)
         for node in route_nodes:
             ret.append((self._G.nodes[node]['y'], self._G.nodes[node]['x']))

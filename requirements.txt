@@ -5,3 +5,4 @@ osmnx
 jsonschema
 networkx
 setuptools
+scikit-learn
