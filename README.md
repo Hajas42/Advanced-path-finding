@@ -12,7 +12,7 @@ Disclaimer: this project is for a university assignment.
 
 2. To run:
     ```sh
-    apf-server
+    apf-server production
     ```
 3. Open the link in your browser
 
@@ -34,6 +34,15 @@ Disclaimer: this project is for a university assignment.
 
 2. To run:
     ```sh
-    apf-server
+    apf-server dev
     ```
 3. Open the link in your browser
+
+
+## Testing:
+
+To run the unit tests:
+```sh
+cd tests
+python -m pytest test_flask.py
+```
