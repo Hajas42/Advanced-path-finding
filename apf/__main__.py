@@ -1,18 +1,39 @@
+import time
+
 import jsonschema
 
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
 from .geocoding.nominatim_geocoder import NominatimGeocoder
 from .planning import PlannerInterface, DrunkPilotPlanner
+from .osmnx_provider import OSMNXProvider
 
 
 app = Flask(__name__, template_folder="./templates")
 
-geocoder = NominatimGeocoder()
-planners: Dict[str, PlannerInterface] = {}
-planner_drunk = DrunkPilotPlanner()
-planners[planner_drunk.internal_name()] = planner_drunk
+# ---------------------------------------------
+# --- APF setup
+# ---------------------------------------------
 
+# --- OSMNX provider
+provider = OSMNXProvider()
+
+# --- Geocoding interface
+geocoder = NominatimGeocoder()
+
+# --- Planners
+planners: Dict[str, PlannerInterface] = {}
+
+
+def register_planner(planner):
+    planners[planner.internal_name()] = planner
+
+
+register_planner(DrunkPilotPlanner(provider))
+
+# ---------------------------------------------
+# --- FLASK
+# ---------------------------------------------
 
 @app.route("/api/geocoding", methods=["GET"])
 def api_geocoding():

@@ -1,6 +1,7 @@
 import math
 import random
 from typing import Tuple, Dict, List, Optional
+from apf.osmnx_provider import OSMNXProvider
 
 from . import planner
 
@@ -29,8 +30,8 @@ class DrunkPilotPlanner(planner.PlannerInterface):
     def fields_schema(cls) -> List[planner.OptionField]:
         return cls._OPTIONS
 
-    def __init__(self):
-        pass
+    def __init__(self, provider: OSMNXProvider):
+        super().__init__(provider)
 
     def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[List[Tuple[float, float]]]:
         # Linearly interpolate between coords (completely disregarding how coordinates work)
