@@ -17,6 +17,7 @@ class NominatimGeocoder(geocoder.GeocoderInterface):
             params["limit"] = max_results
             params["dedupe"] = 0
             params["q"] = query
+            params["countrycodes"] = "hu"  # TODO: place this elsewhere
             response_json = osmnx.downloader.nominatim_request(params=params, request_type="search")
             return [
                 geocoder.GeocodingResult(
@@ -37,6 +38,7 @@ class NominatimGeocoder(geocoder.GeocoderInterface):
             params["lat"] = latlon[0]
             params["lon"] = latlon[1]
             params["zoom"] = 17     # See: https://nominatim.org/release-docs/latest/api/Reverse/#result-limitation
+            params["countrycodes"] = "hu"  # TODO: place this elsewhere
             response_json = osmnx.downloader.nominatim_request(params=params, request_type="reverse")
             return geocoder.GeocodingResult(
                     lat=response_json["lat"],

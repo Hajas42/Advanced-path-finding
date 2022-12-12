@@ -1,4 +1,5 @@
 import jsonschema
+import osmnx.geometries
 
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
@@ -83,7 +84,7 @@ def api_autocomplete():
                     "lon": loc.lon,
                     "importance": loc.importance,
                     "name": loc.name
-                } for loc in sorted(locations_resolved, key=lambda a, b: a.importance > b.importance)
+                } for loc in sorted(locations_resolved, key=lambda a: a.importance, reverse=True)
             ]
         })
     else:
@@ -93,10 +94,12 @@ def api_autocomplete():
         })
 
 
-@app.route("/api/planners", methods=["GET"])
-def api_methods():
+@app.route("/api/config", methods=["GET"])
+def api_config():
     return jsonify({
         "status": "ok",
+        # TODO: cache this somehow / transfer this to the client in a more clever way
+        "bounds": list(zip(*osmnx.geocode_to_gdf({"country": "Hungary"}).iloc[0]["geometry"].exterior.coords.xy[::-1])),
         "planners": [{
             "name": name,
             "display_name": planner.display_name(),
@@ -147,8 +150,10 @@ def api_route():
     planner = planners[planner_name]
 
     fields = json_data["fields"]
-    planner_schema = {x.name: x for x in planner.fields_schema()}
-    if len(planner_schema) != len(fields) or any(name not in planner_schema or not isinstance(value, planner_schema[name].value_type) for name, value in fields.items()):
+    fields_schema = {x.name: x for x in planner.fields_schema()}
+    if len(fields_schema) != len(fields) or any(
+            name not in fields_schema or not fields_schema[name].validate_value(value) for name, value in
+            fields.items()):
         return jsonify({
             "status": "error",
             "reason": "malformed fields"

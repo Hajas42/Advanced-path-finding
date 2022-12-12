@@ -5,21 +5,44 @@ var mapWrapper = (function() {
     // TODO: somehow sync this with css
     let isMobile = window.matchMedia("only screen and (max-width: 768px)").matches;
 
+    // -------------------------------------------
+    // - GLOBAL OBJECTS
+    // -------------------------------------------
     let map;  // the global map object
+    let mapBounds = null;
     let currentPosMarker = null;
     let searchFormFrom = null;
     let searchFormTo = null;
-    let buttonPlan = null;
+    let buttonPlan = $("#sidebar-button-plan");
     let bodyElement = $('body');
 
+    // -------------------------------------------
+    // - POPUPS
+    // -------------------------------------------
     class Popup {
         static popups = new Set();
 
+        /**
+         * Adds a popup
+         * @param {String}  title   the title of the popup
+         * @param {String}  content the content of the popup
+         * @param {Boolean} modal   whether it is modal
+         * @returns 
+         */
         static addPopup(title, content, modal) {
             return new Popup(title, content, modal);
         }
 
+        /**
+         * Constructs a popup
+         * @param {String}  title   the title of the popup
+         * @param {String}  content the content of the popup
+         * @param {Boolean} modal   whether it is modal
+         * @returns 
+         */
         constructor(title, content, modal) {
+            Popup.popups.add(this);
+
             if (modal) {
                 this._modalElement = $('<div class="modal-block"></div>');
                 bodyElement.append(this._modalElement);
@@ -37,36 +60,25 @@ var mapWrapper = (function() {
             this._popupElement = $('<div class="popup">').append(this._popupTitleElement, this._popupContentElement, this._popupButtonsElement);
 
             this._popup_ctx = {popup: this};
-            this._buttonOkElement.bind("click", this._popup_ctx, this._onOk);
-            this._buttonCloseElement.bind("click", this._popup_ctx, this._onClose);
+            this._buttonOkElement.click(() => this.remove());
+            this._buttonCloseElement.click(() => this.remove());
 
             bodyElement.append(this._popupElement);
-
-            Popup.popups.add(this);
         }
 
-        _onOk(e) {
-            e.data.popup.remove();
-        }
-
-        _onClose(e) {
-            e.data.popup.remove();
-        }
-
+        /**
+         * Destroys the popup
+         */
         remove() {
-            if (this._modalElement != null) {
+            if (this._modalElement != null)
                 this._modalElement.remove();
-            }
             this._popupElement.remove();
             Popup.popups.delete(this);
         }
     }
 
-    function onJQueryCommunicationError(jqXHR, textStatus, errorThrown) {
-        console.log("Communication error:", jqXHR, textStatus, errorThrown);
-        Popup.addPopup("Error", "Error while communicating with the backend.", true);
-    }
-
+    // -------------------------------------------
+    
     class PositionRadiusMarker {
         constructor(latlng, radius) {
             this.circle = L.circle(latlng, radius, {
@@ -135,6 +147,7 @@ var mapWrapper = (function() {
         constructor(formElement, markerIconUrl, buttonColor, placeholder) {
             this.formDom = $(formElement);
             this.inputDom = this.formDom.find(".sidebar-search-input");
+            this.autocompleteDom = this.formDom.find(".sidebar-search-autocomplete");
             this.locationDom = this.formDom.find(".sidebar-search-location");
 
             this.locationDom.css('color', buttonColor);
@@ -151,10 +164,12 @@ var mapWrapper = (function() {
             this._latlng = null;
             this._location_name = null;
             this._xhr_stamp = 0;  // so we can ignore older XHR results
+            this._autocompleteTimer = null;
 
             // Set up the events
             this.formDom.bind("submit", this._form_ctx, this._onSubmit);
-            this.inputDom.bind("change", this._form_ctx, this._onInputChange);
+            this.inputDom.bind("input", this._form_ctx, this._onInputChange);
+            this.inputDom.bind("focusout", this._form_ctx, this._onInputFocusOut);
             this.locationDom.bind("click", this._form_ctx, this._onLocationClick);
         }
 
@@ -166,6 +181,7 @@ var mapWrapper = (function() {
             // TODO: is there a nicer way of doing this?
             return $('<form autocomplete="off" id="sidebar-from-form" class="sidebar-element sidebar-search sidebar-roundinside">')
                     .append('<input class="sidebar-search-input" type="text" name="search" />')
+                    .append('<div class="sidebar-search-autocomplete"></div>')
                     .append('<button class="sidebar-button sidebar-search-location" type="button"><i class="fa fa-location-dot"></i></button>')
                     .append('<button class="sidebar-button sidebar-search-submit" type="submit"><i class="fa fa-search"></i></button>');
         }
@@ -177,6 +193,9 @@ var mapWrapper = (function() {
             return this._latlng;
         }
 
+        /**
+         * The current name of the current location.
+         */
         get location_name() {
             return this._location_name;
         }
@@ -224,11 +243,75 @@ var mapWrapper = (function() {
         }
 
         /**
+         * Cancels the autocomplete process.
+         */
+        _cancelAutocomplete() {
+            // Cancel any pending autocomplete
+            if (this._autocompleteRequest != null) {
+                this._autocompleteRequest.abort();
+                this._autocompleteRequest = null;
+            }
+            if (this._autocompleteTimer != null) {
+                clearTimeout(this._autocompleteTimer);
+                this._autocompleteTimer = null;
+            }
+
+            // Reuse the timer object for this dirty hack
+            this._autocompleteTimer = setTimeout(() => {
+                this.autocompleteDom.empty();
+                this.autocompleteDom.hide();
+            }, 200);
+        }
+
+        /**
          * A callback for when the address search bar's content is modified.
          * @param {*} e event parameter
          */
         _onInputChange(e) {
-            // TODO: autocomplete
+            let form = e.data.form;
+
+            // The user cleared the input
+            if (form.inputDom.val() === "") {
+                form._cancelAutocomplete();
+                return;
+            }
+
+            // Timeout to ease the load on the backend
+            if (form._autocompleteTimer != null)
+                clearTimeout(form._autocompleteTimer);
+            form._autocompleteTimer = setTimeout(function() {
+                // Terminate any previous requests
+                if (form._autocompleteRequest != null)
+                    form._autocompleteRequest.abort();
+                form._autocompleteRequest = requestAutocomplete(form.inputDom.val(), function(result) {
+
+                    // Clear previous results
+                    form.autocompleteDom.empty();
+                    form.autocompleteDom.show();
+
+                    if (result["status"] !== "ok" || result["locations"].length == 0)
+                        return;
+
+                    // Add results
+                    result["locations"].forEach(entry => {
+                        const name = entry.name;
+                        const latlng = L.latLng(entry.lat, entry.lon);
+                        let itemElement = $('<div></div>').text(name);
+                        itemElement.click(function() {
+                            form.inputDom.val(name);
+                            form.markerPlaceAt(latlng, name);
+                            map.flyTo(latlng, 16);
+                        });
+                        form.autocompleteDom.append(itemElement);
+                    });
+                });
+            }, 500);
+        }
+
+        _onInputFocusOut(e) {
+            let form = e.data.form;
+
+            form._cancelAutocomplete();
         }
 
         /**
@@ -311,9 +394,8 @@ var mapWrapper = (function() {
     }
 
     class Route {
-        static _colorCounter = 0;
-
         // https://stackoverflow.com/questions/10014271/generate-random-color-distinguishable-to-humans
+        static _colorCounter = 0;
         static nextColor() {
             const hue = Route._colorCounter++ * 137.508; // use golden angle approximation
             return `hsl(${hue},100%,30%)`;
@@ -326,11 +408,27 @@ var mapWrapper = (function() {
 
         static routes = new Set();
 
+        /**
+         * Adds a route object
+         * @param {String} name                  the displayed name of the route
+         * @param {L.latLng[]} waypoints         the route waypoints
+         * @param {String} [description=""]      the description of the route
+         * @param {String} [lineColor=undefined] the line color of the route in a css friendly format
+         */
         static addRoute(name, waypoints, description, lineColor) {
             return new Route(name, waypoints, description, lineColor)
         }
 
+        /**
+         * Constructs a route object
+         * @param {String} name                  the displayed name of the route
+         * @param {L.latLng[]} waypoints         the route waypoints
+         * @param {String} [description=""]      the description of the route
+         * @param {String} [lineColor=undefined] the line color of the route in a css friendly format
+         */
         constructor(name, waypoints, description, lineColor) {
+            Route.routes.add(this);
+
             this._name = name;
             this._description = description || "";
 
@@ -350,11 +448,10 @@ var mapWrapper = (function() {
             this._routeLine = L.polyline(waypoints, this._routeStyle).addTo(map);
             this._routeLine.bindPopup("");
             this._updatePopup();
-            this._routeLine.on('mouseover', this._onRouteLineMouseOver, this);
-            this._routeLine.on('mouseout', this._onRouteLineMouseOut, this);
+            this._routeLine.on('mouseover', () => this._highlightEnable());
+            this._routeLine.on('mouseout', () => this._highlightDisable());
 
             // Sidebar entry
-            this._entry_ctx = {entry: this};
             this._entryName = $('<input type="text" value="" />');
             this._entryNameContainer = $('<div class="sidebar-table-cell sidebar-route-name"></div>').append(this._entryName);
             this._entryLine = $('<div></div>')
@@ -363,17 +460,21 @@ var mapWrapper = (function() {
             this._entryRemoveContainer = $('<div class="sidebar-table-cell sidebar-route-remove"></button></div>').append(this._entryRemove);
             this._entryRow = $('<div class="sidebar-table-row sidebar-routes-row">').append(this._entryNameContainer).append(this._entryLineContainer).append(this._entryRemoveContainer);
 
-            this._entryName.bind("focusout", this._entry_ctx, this._onRouteEntryNameFocusout);
-            this._entryRow.bind("mouseenter", this._entry_ctx, this._onRouteEntryMouseEnter);
-            this._entryRow.bind("mouseleave", this._entry_ctx, this._onRouteEntryMouseLeave);
-            this._entryLineContainer.bind("click", this._entry_ctx, this._onRouteEntryLineClick);
-            this._entryRemove.bind("click", this._entry_ctx, this._onRemoveClicked);
+            this._entryName.bind("focusout", () => {
+                this._name = this._entryName.val();
+                this._updatePopup();
+            });
+            this._entryRow.bind("mouseenter", () => this._highlightEnable());
+            this._entryRow.bind("mouseleave", () => this._highlightDisable());
+            this._entryLineContainer.bind("click", () => {
+                map.fitBounds(this._routeLine.getBounds());
+                this._routeLine.openPopup();
+            });
+            this._entryRemove.bind("click", () => this.remove());
 
             this._entryName.val(name);
             this._entryLine.css('background', lineColor);
             Route.routesTable.append(this._entryRow);
-
-            Route.routes.add(this);
         }
 
         _updatePopup() {
@@ -385,11 +486,6 @@ var mapWrapper = (function() {
             this._routeLine._popup.setContent($('<div></div>').append(title).append(description).get(0));
         }
 
-        _onRouteEntryNameFocusout(e) {
-            e.data.entry._name = e.data.entry._entryName.val();
-            e.data.entry._updatePopup();
-        }
-
         _highlightEnable() {
             this._routeLine.setStyle(this._routeHighlightedStyle);
         }
@@ -398,35 +494,10 @@ var mapWrapper = (function() {
             this._routeLine.setStyle(this._routeStyle);
         }
 
-        _onRouteEntryLineClick(e) {
-            map.fitBounds(e.data.entry._routeLine.getBounds());
-            e.data.entry._routeLine.openPopup();
-        }
-
-        _onRouteEntryMouseEnter(e) {
-            e.data.entry._highlightEnable();
-        }
-
-        _onRouteEntryMouseLeave(e) {
-            e.data.entry._highlightDisable();
-        }
-
-        _onRouteLineMouseOver(e) {
-            this._highlightEnable();
-        }
-
-        _onRouteLineMouseOut(e) {
-            this._highlightDisable();
-        }
-
         remove() {
             this._entryRow.remove();
             map.removeLayer(this._routeLine);
             Route.routes.delete(this);
-        }
-
-        _onRemoveClicked(e) {
-            e.data.entry.remove();
         }
     }
 
@@ -436,7 +507,6 @@ var mapWrapper = (function() {
             this.displayName = displayName;
             this.description = description;
 
-            
             this._rowLabel = $('<label class="sidebar-table-cell sidebar-option-name"></label>');
             this._rowFieldCell = $('<div class="sidebar-table-cell sidebar-option-field">');
             this._row = $('<div class="sidebar-table-row sidebar-options-row">').append(this._rowLabel, this._rowFieldCell);
@@ -451,6 +521,14 @@ var mapWrapper = (function() {
 
         get rowFieldCell() {
             return this._rowFieldCell;
+        }
+
+        get value() {
+            throw new Error("Not implemented");
+        }
+
+        set value(val) {
+            throw new Error("Not implemented");
         }
     }
 
@@ -499,13 +577,25 @@ var mapWrapper = (function() {
     class OptionFieldNumber extends OptionField {
         constructor(name, displayName, description, defaultValue, minValue, maxValue) {
             super(name, displayName, description);
+            this._maxValue = minValue;
+            this._maxValue = maxValue;
             this._fieldNumber = $('<input type="number">');
             if (minValue != null)
                 this._fieldNumber.prop("min", minValue);
             if (maxValue != null)
                 this._fieldNumber.prop("max", maxValue);
+            this._ctx = { field: this };
+            this._fieldNumber.bind('input', () => this._fieldNumber.val(this._clampValue(this._fieldNumber.val())));
             this._fieldNumber.val(defaultValue);
             this.rowFieldCell.append(this._fieldNumber);
+        }
+
+        _clampValue(val) {
+            if (this._maxValue != null)
+                val = Math.min(val, this._maxValue);
+            if (this._minValue != null)
+                val = Math.max(this._minValue, val);
+            return val;
         }
 
         get value() {
@@ -513,21 +603,34 @@ var mapWrapper = (function() {
         }
 
         set value(val) {
-            return this._fieldNumber.val(val);
+            return this._fieldNumber.val(this._clampValue(val));
         }
     }
 
     class OptionFieldRange extends OptionField {
         constructor(name, displayName, description, defaultValue, minValue, maxValue) {
             super(name, displayName, description);
+            this._maxValue = minValue;
+            this._maxValue = maxValue;
             this._fieldRange = $('<input type="range">');
             if (minValue != null)
                 this._fieldRange.prop("min", minValue);
             if (maxValue != null)
                 this._fieldRange.prop("max", maxValue);
+            this._ctx = { field: this };
+            this._fieldRange.bind('input', () => this._fieldRange.val(this._clampValue(this._fieldRange.val())));
             this._fieldRange.val(defaultValue);
             this.rowFieldCell.append(this._fieldRange);
         }
+
+        _clampValue(val) {
+            if (this._maxValue != null)
+                val = Math.min(val, this._maxValue);
+            if (this._minValue != null)
+                val = Math.max(this._minValue, val);
+            return val;
+        }
+
 
         get value() {
             return parseInt(this._fieldRange.val());
@@ -546,26 +649,36 @@ var mapWrapper = (function() {
         // --- Handle 
         static plannerList;
         static plannerOptionsContainer;
-        static _onMethodListChange(e) {
-            // Empty selection, should not be possible, but hey
-            if (PlannerOptions.plannerList.val() === "") {
-                PlannerOptions._selectedPlannerOptions.hide();
-                PlannerOptions.plannerOptionsContainer.addClass("sidebar-placeholder-force");
-                return;
-            }
 
-            let planner = PlannerOptions.plannerOptions.get(PlannerOptions.plannerList.val());
-            if (planner.empty()) {
-                PlannerOptions.plannerOptionsContainer.addClass("sidebar-placeholder-force");
-            } else {
-                PlannerOptions.plannerOptionsContainer.removeClass("sidebar-placeholder-force");
-            }
-            planner.show();
+        static _hideWithReason(reason) {
+            if (PlannerOptions._selectedPlannerOptions != null)
+                PlannerOptions._selectedPlannerOptions.hide();
+            console.log(PlannerOptions.plannerOptionsContainer.attr("data-placeholder"));
+            PlannerOptions.plannerOptionsContainer.attr("data-placeholder", reason);
+            console.log(PlannerOptions.plannerOptionsContainer.attr("data-placeholder"));
+            PlannerOptions.plannerOptionsContainer.addClass("sidebar-placeholder-force");
         }
+
         static {
             this.plannerList = $("#sidebar-methodselect");
             this.plannerOptionsContainer = $("#sidebar-options-container");
-            this.plannerList.change(this._onMethodListChange);
+            this.plannerList.change(() => {
+                let selectValue = PlannerOptions.plannerList.val();
+
+                // Empty selection, should not be possible, but hey
+                if (selectValue === "") {
+                    PlannerOptions._hideWithReason("Select a method first");
+                    return;
+                }
+
+                let planner = PlannerOptions.plannerOptions.get(selectValue);
+                if (planner.is_empty()) {
+                    PlannerOptions._hideWithReason("This planner does not have any options");
+                } else {
+                    PlannerOptions.plannerOptionsContainer.removeClass("sidebar-placeholder-force");
+                    planner.show();
+                }
+            });
         }
 
         static addPlannerOptions(name, displayName, description, fields) {
@@ -576,6 +689,8 @@ var mapWrapper = (function() {
             this.name = name;
             this.displayName = displayName;
             this.description = description;
+
+            PlannerOptions.plannerOptions.set(this.name, this);
             
             this._plannerListElement = $('<option>', {
                 value: this.name,
@@ -591,8 +706,6 @@ var mapWrapper = (function() {
                 this._optionsElement.append(field.row);
             });
             PlannerOptions.plannerOptionsContainer.append(this._optionsElement);
-
-            PlannerOptions.plannerOptions.set(this.name, this);
         }
 
         valuesToJson() {
@@ -604,21 +717,19 @@ var mapWrapper = (function() {
         }
 
         hide() {
-            if (PlannerOptions._selectedPlannerOptions === this) {
+            if (PlannerOptions._selectedPlannerOptions === this)
                 PlannerOptions._selectedPlannerOptions = null;
-            }
             this._optionsElement.hide();
         }
 
         show () {
-            if (PlannerOptions._selectedPlannerOptions !== null) {
+            if (PlannerOptions._selectedPlannerOptions !== null)
                 PlannerOptions._selectedPlannerOptions.hide();
-            }
             PlannerOptions._selectedPlannerOptions = this;
             this._optionsElement.show();
         }
 
-        empty() {
+        is_empty() {
             return this.fields.length == 0;
         }
 
@@ -659,12 +770,26 @@ var mapWrapper = (function() {
     // - API CALLS
     // -------------------------------------------------------------
 
+    /**
+     * Helper function to convert from leaflet js's "latlng" to our "latlon".
+     */
     function latlng2latlon(latlng) {
         return {lat: latlng.lat, lon: latlng.lng};
     }
 
+    /**
+     * Standard ajax error handler
+     */
+    function onJQueryCommunicationError(jqXHR, textStatus, errorThrown) {
+        if (errorThrown === "abort")
+            return;
+
+        console.log("Communication error:", jqXHR, textStatus, errorThrown);
+        Popup.addPopup("Error", "Error while communicating with the backend.", true);
+    }
+
     function requestGeocoding(query, onSuccessCallback, onFailCallback, alwaysCallback) {
-        $.ajax({
+        return $.ajax({
             url: "/api/geocoding",
             type: "get",
             dataType: "json",
@@ -675,7 +800,7 @@ var mapWrapper = (function() {
     }
 
     function requestReverse(latlng, onSuccessCallback, onFailCallback, alwaysCallback) {
-        $.ajax({
+        return $.ajax({
             url: "/api/reverse",
             type: "get",
             dataType: "json",
@@ -684,7 +809,7 @@ var mapWrapper = (function() {
     }
 
     function requestAutocomplete(query, onSuccessCallback, onFailCallback, alwaysCallback) {
-        $.ajax({
+        return $.ajax({
             url: "/api/autocomplete",
             type: "get",
             dataType: "json",
@@ -694,16 +819,16 @@ var mapWrapper = (function() {
         }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
-    function requestPlanners(onSuccessCallback, onFailCallback, alwaysCallback) {
-        $.ajax({
-            url: "/api/planners",
+    function requestConfig(onSuccessCallback, onFailCallback, alwaysCallback) {
+        return $.ajax({
+            url: "/api/config",
             type: "get",
             dataType: "json",
         }).done(onSuccessCallback).fail(onFailCallback || onJQueryCommunicationError).always(alwaysCallback);
     }
 
     function requestPlan(from_latlng, to_latlng, planner, fields, onSuccessCallback, onFailCallback, alwaysCallback) {
-        $.ajax({
+        return $.ajax({
             url: "/api/plan",
             type: "post",
             dataType: "json",
@@ -721,12 +846,20 @@ var mapWrapper = (function() {
     // - End of API CALLS
     // -------------------------------------------------------------
 
-    function plannersCallback(result) {
+    function configCallback(result) {
         if (result["status"] === "ok" && result["planners"].length > 0) {
+            // Add the map bounds
+            let worldLatlngs = [
+                L.latLng([90, 180]),
+                L.latLng([90, -180]),
+                L.latLng([-90, -180]),
+                L.latLng([-90, 180])
+            ];
+            mapBounds = L.polygon([worldLatlngs, result["bounds"]], {color: 'red'}).addTo(map);
+            mapBounds.bindPopup("Not yet supported");
 
             // Add the methods
             $.each(result["planners"], function(k, planner) {
-                console.log(planner);
                 let fields = [];
                 $.each(planner["fields"], function(j, field) {
                     const field_type = field[0];
@@ -790,6 +923,8 @@ var mapWrapper = (function() {
                 if (result["status"] === "ok") {
                     let description = `A route from '${fromName}' to '${toName}' using the planner named '${PlannerOptions._selectedPlannerOptions.displayName}'.`
                     Route.addRoute(`${PlannerOptions._selectedPlannerOptions.displayName} #${routeCounter++}`, result["coords"], description);
+                } else {
+                    Popup.addPopup("Error", "Error while planning the route.", true);
                 }
             },
             null,
@@ -852,12 +987,10 @@ var mapWrapper = (function() {
             "#670000",
             "To..."
         );
+        buttonPlan.click(onPlan);
 
         // Request the methods
-        requestPlanners(plannersCallback);
-
-        buttonPlan = $("#sidebar-button-plan");
-        buttonPlan.click(onPlan);
+        requestConfig(configCallback);
 
         console.log("initialized map!");
     }
