@@ -2,6 +2,7 @@ import math
 import networkx as nx
 import osmnx as ox
 from typing import Tuple, Dict, List, Optional
+import geopy.distance
 
 from . import planner
 
@@ -49,8 +50,14 @@ class TouristRoutePlanner(planner.PlannerInterface):
                 key_dict.append((tag, tourist_place_details[tag]))
         return str(key_dict)
 
-    def __heur_func(self, tourist_place, nearest_node, source_node, target_node):
+    def __heur_func(self, tourist_place, nearest_node, source_node, target_node, route, max_dist):
         if tourist_place[1]['tourism'] in ['hotel', 'hostel', 'motel', 'information', 'guest_house', 'apartment']:
+            return -1
+        too_far = True
+        for node in route:
+            if nx.shortest_path_length(self._G, source_node, nearest_node) <= max_dist:
+                too_far = False
+        if too_far:
             return -1
         try:
             path_length_from_source = nx.shortest_path_length(self._G, source_node, nearest_node)
@@ -84,21 +91,25 @@ class TouristRoutePlanner(planner.PlannerInterface):
 
         evaluated_tourist_places = set()
         index = 0
-        for node in route:
-            tourist_places = ox.geometries.geometries_from_point((self._G.nodes[node]['y'], self._G.nodes[node]['x']),
-                                                                 tags={'tourism': True}, dist=max_dist)
-            for tourist_place in tourist_places.iterrows():
-                key = TouristRoutePlanner.__generate_key(tourist_place[1])
-                if key not in evaluated_tourist_places:
-                    evaluated_tourist_places.add(key)
-                    geometry = tourist_place[1].geometry
-                    x = geometry.centroid.x
-                    y = geometry.centroid.y
-                    nearest_node = ox.nearest_nodes(self._G, x, y)
-                    score = self.__heur_func(tourist_place, nearest_node, source_node, target_node)
-                    if score > 0:
-                        heuristic_values[key] = (score, index, nearest_node, tourist_place[1])
-                        index = index + 1
+        print("Check1")
+        print(geopy.distance.geodesic(source, target).m/2)
+        tourist_places = ox.geometries.geometries_from_point(((source[0]+target[0])/2, (source[1]+target[1])/2),
+                                                            tags={'tourism': True}, dist=geopy.distance.geodesic(source, target).m/2)
+        print("Check2")
+        for tourist_place in tourist_places.iterrows():
+
+            print("Check3")
+            key = TouristRoutePlanner.__generate_key(tourist_place[1])
+            if key not in evaluated_tourist_places:
+                evaluated_tourist_places.add(key)
+                geometry = tourist_place[1].geometry
+                x = geometry.centroid.x
+                y = geometry.centroid.y
+                nearest_node = ox.nearest_nodes(self._G, x, y)
+                score = self.__heur_func(tourist_place, nearest_node, source_node, target_node, route, max_dist)
+                if score > 0:
+                    heuristic_values[key] = (score, index, nearest_node, tourist_place[1])
+                    index = index + 1
 
         places_sorted_by_scores = {k: v for k, v in
                                    sorted(heuristic_values.items(), key=lambda item: item[1][0], reverse=True)}
@@ -133,6 +144,7 @@ class TouristRoutePlanner(planner.PlannerInterface):
         ret = []
         route_nodes = self.__calculate_tourist_route(source=coord_from, target=coord_to, max_dist=max_dist,
                                                      max_tourist_places=max_tourist_places)
+        print(route_nodes)
         for node in route_nodes:
             ret.append((self._G.nodes[node]['y'], self._G.nodes[node]['x']))
 
