@@ -106,8 +106,12 @@ class OSMNXProvider:
         """Loads the cached dictionary from disk using pickle"""
 
         if self.exists_cache():
-            with open(self._cache_path, "rb") as f:
-                self._cache = pickle.load(f)
+            try:
+                with open(self._cache_path, "rb") as f:
+                    self._cache = pickle.load(f)
+            except Exception:
+                # Maybe the file is corrupted, remove it
+                os.unlink(self._cache_path)
             return True
         else:
             return False
