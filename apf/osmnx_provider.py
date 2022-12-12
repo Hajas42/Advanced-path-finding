@@ -53,6 +53,19 @@ class OSMNXProvider:
         if not _is_shutting_down():
             self.save()
 
+    @property
+    def cache_path(self) -> str:
+        return self._cache_path
+
+    @property
+    def cache_duration_seconds(self) -> int:
+        return self._cache_duration_seconds
+
+    def remove_older(self, than_seconds: int):
+        """Removes entries that are older than 'than_seconds' from the cache"""
+        # TODO
+        raise NotImplementedError
+
     def wrap(self, func: Callable, *args, **kwargs):
         """Caches a function call based on its arguments"""
 
