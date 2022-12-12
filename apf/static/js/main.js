@@ -911,18 +911,19 @@ var mapWrapper = (function() {
             return;
         }
 
-        if (PlannerOptions._selectedPlannerOptions == null) {
+        let _plannerOptions = PlannerOptions._selectedPlannerOptions;
+        if (_plannerOptions == null) {
             Popup.addPopup("Info", "Please choose a planner first.", true);
             return;
         }
 
         // Block the button temporarely
         buttonPlan.prop('disabled', true);
-        requestPlan(from, to, PlannerOptions._selectedPlannerOptions.name, PlannerOptions._selectedPlannerOptions.valuesToJson(),
+        requestPlan(from, to, _plannerOptions.name, _plannerOptions.valuesToJson(),
             function (result){
                 if (result["status"] === "ok") {
-                    let description = `A route from '${fromName}' to '${toName}' using the planner named '${PlannerOptions._selectedPlannerOptions.displayName}'.`
-                    Route.addRoute(`${PlannerOptions._selectedPlannerOptions.displayName} #${routeCounter++}`, result["coords"], description);
+                    let description = `A route from '${fromName}' to '${toName}' using the planner named '${_plannerOptions.displayName}'.`
+                    Route.addRoute(`${_plannerOptions.displayName} #${routeCounter++}`, result["coords"], description);
                 } else {
                     Popup.addPopup("Error", "Error while planning the route.", true);
                 }
