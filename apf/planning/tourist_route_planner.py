@@ -137,12 +137,11 @@ class TouristRoutePlanner(planner.PlannerInterface):
         route += nx.shortest_path(self._G, source_node, target_node)
         return route
 
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[
-                List[Tuple[float, float]]]:
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> planner.PlanResult:
         ret = []
         route_nodes = self.__calculate_tourist_route(source=coord_from, target=coord_to, max_dist=options['max_dist'],
                                                      max_tourist_places=options['max_tourist_places'])
         for node in route_nodes:
             ret.append((self._G.nodes[node]['y'], self._G.nodes[node]['x']))
 
-        return ret
+        return planner.PlanResult(planner.PlanResultStatus.OK, ret)

@@ -927,8 +927,20 @@ var mapWrapper = (function() {
             function (result){
                 console.log("Got plan",result);
                 if (result["status"] === "ok") {
-                    let description = `A route from '${fromName}' to '${toName}' using the planner named '${_plannerOptions.displayName}'.`
-                    Route.addRoute(`${_plannerOptions.displayName} #${routeCounter++}`, result["coords"], description);
+                    const planStatus = result["plan_status"];
+                    if (planStatus === 0) {
+                        let description = `A route from '${fromName}' to '${toName}' using the planner named '${_plannerOptions.displayName}'.`
+                        Route.addRoute(`${_plannerOptions.displayName} #${routeCounter++}`, result["waypoints"], description);
+                    } else if (planStatus <= 3) {
+                        const error2str = {
+                            1: "An internal error was encountered. Rest assured, our fine technicians are working hard on fixing the problem!",
+                            2: "There are no valid routes between the waypoints.",
+                            3: "One of the waypoints was out out bounds."
+                        }
+                        Popup.addPopup("Error", error2str[planStatus], true);
+                    } else {
+                        Popup.addPopup("Error", "Something went horribly wrong.", true);
+                    }
                 } else {
                     Popup.addPopup("Error", "Error while planning the route.", true);
                 }

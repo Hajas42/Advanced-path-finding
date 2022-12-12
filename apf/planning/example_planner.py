@@ -33,7 +33,7 @@ class DrunkPilotPlanner(planner.PlannerInterface):
     def __init__(self, provider: OSMNXProvider):
         super().__init__(provider)
 
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[List[Tuple[float, float]]]:
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> planner.PlanResult:
         # Linearly interpolate between coords (completely disregarding how coordinates work)
         ret = [coord_from]
         N = 10
@@ -46,5 +46,5 @@ class DrunkPilotPlanner(planner.PlannerInterface):
             jitter = n[0] * r, n[1] * r
             ret.append(tuple(coord_from[j] * (1 - k) + coord_to[j] * k + jitter[j] for j in (0, 1)))
         ret.append(coord_to)
-        return ret
+        return planner.PlanResult(planner.PlanResultStatus.OK, ret)
 

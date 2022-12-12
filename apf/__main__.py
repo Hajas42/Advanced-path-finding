@@ -187,8 +187,8 @@ def api_route():
     coords_from = json_data["from"]["lat"], json_data["from"]["lon"]
     coords_to = json_data["to"]["lat"], json_data["to"]["lon"]
 
-    coords = planner.plan(coords_from, coords_to, fields)
-    if coords is None:
+    final_plan = planner.plan(coords_from, coords_to, fields)
+    if final_plan is None:
         return jsonify({
             "status": "error",
             "coords": "could not plan journey"
@@ -196,7 +196,8 @@ def api_route():
 
     return jsonify({
         "status": "ok",
-        "coords": coords
+        "plan_status": int(final_plan.status),
+        "waypoints": final_plan.waypoints
     })
 
 

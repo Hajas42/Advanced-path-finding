@@ -1,9 +1,7 @@
-import dataclasses
 from typing import Tuple, Optional, List, NamedTuple, Dict, ClassVar, Any
 import abc
 from dataclasses import dataclass
-import json
-import osmnx as ox
+import enum
 from apf.osmnx_provider import OSMNXProvider
 
 
@@ -85,6 +83,19 @@ class OptionFieldRange(OptionField):
         return isinstance(value, self.value_type) and self.min_value <= value <= self.max_value
 
 
+class PlanResultStatus(enum.IntEnum):
+    OK = 0
+    ERROR_INTERNAL = 1
+    ERROR_NO_ROUTE = 2
+    ERROR_OUT_OF_BOUNDS = 3
+
+
+@dataclass()
+class PlanResult:
+    status: PlanResultStatus
+    waypoints: Optional[List[Tuple[float, float]]] = None
+
+
 class PlannerInterface(abc.ABC):
     def __init__(self, provider: OSMNXProvider):
         self._provider: OSMNXProvider = provider
@@ -117,7 +128,7 @@ class PlannerInterface(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict[str, Any]) -> Optional[List[Tuple[float, float]]]:
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict[str, Any]) -> PlanResult:
         """Plans a route from 'coord_from' to 'coord_to'. Returns a list of waypoints."""
         raise NotImplementedError
 

@@ -268,14 +268,15 @@ class SafestPlanner(planner.PlannerInterface):
 
         return (danger_rate * edge["length"]) / max_speed(edge)
 
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[
-        List[Tuple[float, float]]]:
-        source_node = ox.nearest_nodes(self._G, coord_from[1], coord_from[0], return_dist=False)
-        target_node = ox.nearest_nodes(self._G, coord_to[1], coord_to[0], return_dist=False)
-        route = bidirectional_dijkstra(self._G, source_node, target_node, weight=SafestPlanner.safest_weight)
-        route_coordinates = [(self._G.nodes[node]['y'], self._G.nodes[node]['x']) for node in route[1]]
-
-        return route_coordinates
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> planner.PlanResult:
+        try:
+            source_node = ox.nearest_nodes(self._G, coord_from[1], coord_from[0], return_dist=False)
+            target_node = ox.nearest_nodes(self._G, coord_to[1], coord_to[0], return_dist=False)
+            route = bidirectional_dijkstra(self._G, source_node, target_node, weight=SafestPlanner.safest_weight)
+            route_coordinates = [(self._G.nodes[node]['y'], self._G.nodes[node]['x']) for node in route[1]]
+            return planner.PlanResult(planner.PlanResultStatus.OK, route_coordinates)
+        except Exception:
+            return planner.PlanResult(planner.PlanResultStatus.ERROR_INTERNAL)
 
 
 class RobustPlanner(planner.PlannerInterface):
@@ -323,13 +324,13 @@ class RobustPlanner(planner.PlannerInterface):
             robustness += edge["robustness"]
         return (robustness * edge["length"]) / max_speed(edge)
 
-    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> Optional[
-        List[Tuple[float, float]]]:
-        source_node = ox.nearest_nodes(self._G, coord_from[1], coord_from[0], return_dist=False)
-        target_node = ox.nearest_nodes(self._G, coord_to[1], coord_to[0], return_dist=False)
-        route = bidirectional_dijkstra(self._G, source_node, target_node, weight=RobustPlanner.robust_weight)
-
-        route_coordinates = [(self._G.nodes[node]['y'], self._G.nodes[node]['x']) for node in route[1]]
-
-        return route_coordinates
+    def plan(self, coord_from: Tuple[float, float], coord_to: Tuple[float, float], options: Dict) -> planner.PlanResult:
+        try:
+            source_node = ox.nearest_nodes(self._G, coord_from[1], coord_from[0], return_dist=False)
+            target_node = ox.nearest_nodes(self._G, coord_to[1], coord_to[0], return_dist=False)
+            route = bidirectional_dijkstra(self._G, source_node, target_node, weight=RobustPlanner.robust_weight)
+            route_coordinates = [(self._G.nodes[node]['y'], self._G.nodes[node]['x']) for node in route[1]]
+            return planner.PlanResult(planner.PlanResultStatus.OK, route_coordinates)
+        except Exception:
+            return planner.PlanResult(planner.PlanResultStatus.ERROR_INTERNAL)
 
