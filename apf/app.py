@@ -2,6 +2,7 @@ import time
 
 import jsonschema
 import osmnx.geometries
+import logging
 
 from flask import Flask, render_template, request, jsonify
 from typing import Dict, Tuple
@@ -14,6 +15,14 @@ def create_app(config_obj):
     app = Flask(__name__, template_folder="./templates")
     app.config.from_object(config_obj)
 
+    # Use gunicorn's logger if it's present
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    if gunicorn_logger.hasHandlers():
+        app.logger.handlers = gunicorn_logger.handlers
+        app.logger.setLevel(gunicorn_logger.level)
+
+    app.logger.info("Creating application")
+
     # ---------------------------------------------
     # --- APF setup
     # ---------------------------------------------
@@ -25,6 +34,7 @@ def create_app(config_obj):
     geocoder = NominatimGeocoder()
 
     # --- Planners
+    app.logger.info("Loading planners")
     planners: Dict[str, PlannerInterface] = {}
 
     def register_planner(planner):
@@ -34,6 +44,7 @@ def create_app(config_obj):
     register_planner(SafestPlanner(provider))
     register_planner(RobustPlanner(provider))
     register_planner(TouristRoutePlanner(provider))
+    app.logger.info("Planners are loaded")
 
     # ---------------------------------------------
     # --- FLASK
