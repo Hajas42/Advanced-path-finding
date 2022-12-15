@@ -9,3 +9,4 @@ scikit-learn
 geopandas
 pytest
 ml_collections
+gunicorn

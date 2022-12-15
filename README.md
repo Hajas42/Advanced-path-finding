@@ -14,6 +14,10 @@ Disclaimer: this project is for a university assignment.
     ```sh
     apf-server
     ```
+    Or:
+    ```sh
+    gunicorn --bind 0.0.0.0:5000 --timeout 0 "apf.app:create_app('apf.configs.AppProductionConfig')"
+    ```
 3. Open the link in your browser
 
 ## Development:
@@ -37,6 +41,12 @@ Disclaimer: this project is for a university assignment.
     apf-server
     ```
 3. Open the link in your browser
+
+## Docker
+
+```sh
+docker-compose up --detach --build
+```
 
 ## Testing:
 
